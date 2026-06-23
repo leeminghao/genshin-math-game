@@ -1,0 +1,4 @@
+interface:
+  display_name: "文明历史数学方法论"
+  short_description: "整理文明历史中的数学起源传播文化实践与抽象化方法论"
+  default_prompt: "请使用文明历史数学方法论，按章节/模块整理这段内容的核心观点、文明需求、数学工具和历史案例。"

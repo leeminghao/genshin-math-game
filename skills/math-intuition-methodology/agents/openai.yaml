@@ -1,0 +1,4 @@
+interface:
+  display_name: "数学直觉方法论"
+  short_description: "用《数学觉醒》式心理图像、具身经验和系统3框架评审数学学习体验"
+  default_prompt: "使用数学直觉方法论评审这个数学学习设计，区分事实、推断、假设和建议。"
