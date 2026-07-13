@@ -1,0 +1,4 @@
+interface:
+  display_name: "用数学理解万物"
+  short_description: "把生活问题转化为可核查、可解释且有边界的数学推理方法"
+  default_prompt: "使用 $reason-with-everyday-math 把这个生活问题建模、核查，并用通俗中文解释结论与局限。"
