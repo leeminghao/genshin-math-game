@@ -1,0 +1,32 @@
+name: MathTown
+options:
+  bundleIdPrefix: com.math-town
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: zh-Hans
+  generateEmptyDirectories: true
+targets:
+  MathTown:
+    type: application
+    platform: iOS
+    sources:
+      - path: MathTown
+    settings:
+      base:
+        INFOPLIST_FILE: MathTown/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.math-town.mathtown
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.8"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_INTERFACE_ORIENTATION_LANDSCAPE_LEFT: NO
+        SUPPORTS_INTERFACE_ORIENTATION_LANDSCAPE_RIGHT: NO
+        SUPPORTS_INTERFACE_ORIENTATION_PORTRAIT: YES
+    info:
+      path: MathTown/Info.plist
+      properties:
+        CFBundleDisplayName: 数学小镇
+        UILaunchStoryboardName: LaunchScreen
+        UIRequiresFullScreen: NO
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
