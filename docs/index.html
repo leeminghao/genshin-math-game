@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数学小镇日常</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --cream: #FFF8E7;
+      --pink: #FFB7C5;
+      --pink-dark: #FF8FAB;
+      --blue: #A0E7E5;
+      --blue-dark: #5ED4D0;
+      --yellow: #FFE699;
+      --yellow-dark: #E6C200;
+      --green: #B4F8C8;
+      --green-dark: #7EE8A0;
+      --brown: #8B4513;
+      --text: #4A4A4A;
+      --shadow: rgba(0,0,0,0.1);
+    }
+
+    body {
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: linear-gradient(135deg, var(--cream) 0%, #FFF0F5 100%);
+      min-height: 100vh;
+      color: var(--text);
+      padding: 20px;
+    }
+
+    .game-container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 2rem;
+      color: var(--brown);
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      color: #777;
+      font-size: 0.95rem;
+    }
+
+    .nav-tabs {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .nav-tab {
+      padding: 10px 24px;
+      border-radius: 30px;
+      border: 3px solid transparent;
+      background: white;
+      color: var(--brown);
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 12px var(--shadow);
+      transition: all 0.2s ease;
+    }
+
+    .nav-tab.active {
+      background: var(--yellow);
+      border-color: var(--yellow-dark);
+      transform: translateY(-2px);
+    }
+
+    .nav-tab:hover:not(.active) {
+      transform: translateY(-1px);
+    }
+
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+      animation: fadeIn 0.4s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .level-badge {
+      display: inline-block;
+      background: var(--pink);
+      color: white;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-weight: bold;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 0 var(--pink-dark);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+    }
+
+    .story-card {
+      background: white;
+      border-radius: 24px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 24px var(--shadow);
+      border: 3px solid var(--yellow);
+      transition: all 0.3s ease;
+    }
+
+    .story-card.shake {
+      animation: shake 0.5s ease;
+      border-color: #FF6B6B;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+      20%, 40%, 60%, 80% { transform: translateX(8px); }
+    }
+
+    .story-text {
+      font-size: 1.05rem;
+      line-height: 1.6;
+      color: var(--brown);
+    }
+
+    .people-row {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin: 14px 0;
+      font-size: 1.8rem;
+    }
+
+    .people-row span {
+      display: inline-block;
+      animation: popIn 0.4s ease backwards;
+    }
+
+    .people-row span:nth-child(1) { animation-delay: 0s; }
+    .people-row span:nth-child(2) { animation-delay: 0.05s; }
+    .people-row span:nth-child(3) { animation-delay: 0.1s; }
+    .people-row span:nth-child(4) { animation-delay: 0.15s; }
+    .people-row span:nth-child(5) { animation-delay: 0.2s; }
+    .people-row span:nth-child(6) { animation-delay: 0.25s; }
+
+    @keyframes popIn {
+      0% { transform: scale(0); opacity: 0; }
+      70% { transform: scale(1.2); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .difficulty-selector {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .difficulty-btn {
+      padding: 8px 20px;
+      border-radius: 20px;
+      border: 3px solid #DDD;
+      background: white;
+      color: #666;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .difficulty-btn.active {
+      border-color: var(--blue-dark);
+      background: var(--blue);
+      color: white;
+      transform: scale(1.05);
+    }
+
+    .difficulty-btn:hover:not(.active) {
+      border-color: #BBB;
+      transform: scale(1.02);
+    }
+
+    .recipe-board {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    @media (max-width: 600px) {
+      .recipe-board {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .recipe-card {
+      background: white;
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 8px 24px var(--shadow);
+    }
+
+    .recipe-card.original {
+      border: 3px solid var(--blue);
+    }
+
+    .recipe-card.target {
+      border: 3px solid var(--pink);
+    }
+
+    .recipe-title {
+      font-size: 1.1rem;
+      font-weight: bold;
+      margin-bottom: 14px;
+      text-align: center;
+    }
+
+    .recipe-card.original .recipe-title { color: var(--blue-dark); }
+    .recipe-card.target .recipe-title { color: var(--pink-dark); }
+
+    .ingredient {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px;
+      margin-bottom: 8px;
+      background: var(--cream);
+      border-radius: 14px;
+      transition: all 0.3s ease;
+    }
+
+    .ingredient.correct {
+      background: var(--green);
+      transform: scale(1.02);
+      animation: correctBounce 0.5s ease;
+    }
+
+    @keyframes correctBounce {
+      0% { transform: scale(1); }
+      30% { transform: scale(1.08); }
+      50% { transform: scale(0.98); }
+      70% { transform: scale(1.04); }
+      100% { transform: scale(1.02); }
+    }
+
+    .ingredient.wrong {
+      background: #FFE4E1;
+      animation: wrongWiggle 0.4s ease;
+    }
+
+    @keyframes wrongWiggle {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-4px); }
+      75% { transform: translateX(4px); }
+    }
+
+    .ingredient-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ingredient-icon {
+      font-size: 1.6rem;
+      transition: transform 0.2s ease;
+    }
+
+    .ingredient.correct .ingredient-icon {
+      animation: iconSpin 0.6s ease;
+    }
+
+    @keyframes iconSpin {
+      0% { transform: rotate(0) scale(1); }
+      50% { transform: rotate(20deg) scale(1.2); }
+      100% { transform: rotate(0) scale(1); }
+    }
+
+    .ingredient-name {
+      font-weight: bold;
+      color: var(--brown);
+      font-size: 0.95rem;
+    }
+
+    .ingredient-unit {
+      font-size: 0.8rem;
+      color: #888;
+    }
+
+    .amount-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .amount {
+      font-size: 1.4rem;
+      font-weight: bold;
+      min-width: 32px;
+      text-align: center;
+      color: var(--brown);
+    }
+
+    .amount.changed {
+      animation: numberPop 0.3s ease;
+    }
+
+    @keyframes numberPop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.4); color: var(--pink-dark); }
+      100% { transform: scale(1); }
+    }
+
+    .btn {
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s ease;
+    }
+
+    .btn:active {
+      transform: translateY(2px) scale(0.95);
+    }
+
+    .btn-small {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: white;
+      box-shadow: 0 4px 0 rgba(0,0,0,0.15);
+    }
+
+    .btn-small:active {
+      transform: translateY(3px) scale(0.9);
+    }
+
+    .btn-minus {
+      background: var(--blue);
+      box-shadow: 0 4px 0 var(--blue-dark);
+    }
+
+    .btn-plus {
+      background: var(--pink);
+      box-shadow: 0 4px 0 var(--pink-dark);
+    }
+
+    .hint-bar {
+      background: white;
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 16px;
+      text-align: center;
+      box-shadow: 0 4px 16px var(--shadow);
+      min-height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+
+    .hint-bar.correct {
+      background: var(--green);
+      color: var(--brown);
+    }
+
+    .hint-text {
+      font-size: 0.95rem;
+      color: #666;
+    }
+
+    .hint-text strong {
+      color: var(--brown);
+    }
+
+    .action-area {
+      text-align: center;
+    }
+
+    .btn-bake {
+      background: linear-gradient(135deg, var(--yellow) 0%, #FFD93D 100%);
+      color: var(--brown);
+      font-size: 1.2rem;
+      font-weight: bold;
+      padding: 14px 40px;
+      border-radius: 50px;
+      box-shadow: 0 6px 0 var(--yellow-dark);
+      margin-bottom: 12px;
+      animation: bakeGlow 2s infinite;
+    }
+
+    @keyframes bakeGlow {
+      0%, 100% { box-shadow: 0 6px 0 var(--yellow-dark), 0 0 0 rgba(255, 217, 61, 0); }
+      50% { box-shadow: 0 6px 0 var(--yellow-dark), 0 0 20px rgba(255, 217, 61, 0.6); }
+    }
+
+    .btn-bake:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-bake:active:not(:disabled) {
+      transform: translateY(4px) scale(0.98);
+      box-shadow: 0 2px 0 var(--yellow-dark);
+    }
+
+    .progress-dots {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #DDD;
+      transition: all 0.3s ease;
+    }
+
+    .dot.active {
+      background: var(--pink);
+      transform: scale(1.3);
+      animation: dotPulse 1.5s infinite;
+    }
+
+    @keyframes dotPulse {
+      0%, 100% { transform: scale(1.3); }
+      50% { transform: scale(1.5); }
+    }
+
+    .dot.completed {
+      background: var(--green);
+    }
+
+    .math-note {
+      background: #F0F8FF;
+      border-left: 4px solid var(--blue-dark);
+      padding: 12px 16px;
+      border-radius: 0 12px 12px 0;
+      margin-top: 16px;
+      font-size: 0.9rem;
+      color: #555;
+    }
+
+    /* 小镇视图 */
+    .town-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .building {
+      background: white;
+      border-radius: 24px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 8px 24px var(--shadow);
+      border: 3px solid #EEE;
+      transition: all 0.3s ease;
+      position: relative;
+      cursor: pointer;
+    }
+
+    .building.unlocked {
+      border-color: var(--green);
+      background: linear-gradient(135deg, white 0%, #F0FFF4 100%);
+    }
+
+    .building.unlocked:hover {
+      transform: translateY(-5px) scale(1.02);
+      box-shadow: 0 12px 32px var(--shadow);
+    }
+
+    .building.locked {
+      opacity: 0.7;
+      background: #F5F5F5;
+    }
+
+    .building-icon {
+      font-size: 3rem;
+      margin-bottom: 10px;
+      transition: transform 0.3s ease;
+    }
+
+    .building.unlocked .building-icon {
+      animation: bounce 2s infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    .building-name {
+      font-weight: bold;
+      color: var(--brown);
+      margin-bottom: 6px;
+    }
+
+    .building-status {
+      font-size: 0.8rem;
+      color: #888;
+    }
+
+    .building.unlocked .building-status {
+      color: var(--green-dark);
+      font-weight: bold;
+    }
+
+    .lock-icon {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 1.2rem;
+    }
+
+    .town-stats {
+      background: white;
+      border-radius: 20px;
+      padding: 18px;
+      box-shadow: 0 4px 16px var(--shadow);
+      text-align: center;
+    }
+
+    .town-stats h3 {
+      color: var(--brown);
+      margin-bottom: 10px;
+    }
+
+    /* 反馈弹窗 */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    .modal {
+      background: white;
+      border-radius: 32px;
+      padding: 28px;
+      max-width: 460px;
+      width: 100%;
+      text-align: center;
+      animation: pop 0.4s ease;
+    }
+
+    @keyframes pop {
+      0% { transform: scale(0.7); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .modal-emoji {
+      font-size: 4rem;
+      margin-bottom: 12px;
+    }
+
+    .modal-cake {
+      font-size: 5rem;
+      margin-bottom: 12px;
+      animation: cakePop 0.6s ease;
+    }
+
+    @keyframes cakePop {
+      0% { transform: scale(0) rotate(-20deg); }
+      60% { transform: scale(1.2) rotate(10deg); }
+      100% { transform: scale(1) rotate(0); }
+    }
+
+    .modal-title {
+      font-size: 1.4rem;
+      color: var(--brown);
+      margin-bottom: 10px;
+    }
+
+    .modal-text {
+      color: #666;
+      line-height: 1.6;
+      margin-bottom: 18px;
+      font-size: 0.95rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-next {
+      background: var(--green);
+      color: var(--brown);
+      font-size: 1rem;
+      font-weight: bold;
+      padding: 12px 28px;
+      border-radius: 26px;
+      box-shadow: 0 5px 0 var(--green-dark);
+    }
+
+    .btn-retry {
+      background: var(--pink);
+      color: white;
+      font-size: 1rem;
+      font-weight: bold;
+      padding: 12px 28px;
+      border-radius: 26px;
+      box-shadow: 0 5px 0 var(--pink-dark);
+    }
+
+    .btn-town {
+      background: var(--blue);
+      color: white;
+      font-size: 1rem;
+      font-weight: bold;
+      padding: 12px 28px;
+      border-radius: 26px;
+      box-shadow: 0 5px 0 var(--blue-dark);
+    }
+
+    .confetti {
+      position: fixed;
+      pointer-events: none;
+      z-index: 99;
+    }
+
+    .feedback-detail {
+      background: var(--cream);
+      border-radius: 16px;
+      padding: 14px;
+      margin: 12px 0;
+      text-align: left;
+    }
+
+    .feedback-detail ul {
+      margin-left: 20px;
+      color: #555;
+      font-size: 0.9rem;
+    }
+
+    .feedback-detail li {
+      margin-bottom: 6px;
+    }
+
+    .star-rating {
+      font-size: 1.8rem;
+      margin: 10px 0;
+      letter-spacing: 4px;
+      animation: starShine 0.8s ease;
+    }
+
+    @keyframes starShine {
+      0% { transform: scale(0); opacity: 0; }
+      50% { transform: scale(1.3); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .sound-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: white;
+      border: 3px solid var(--yellow);
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      cursor: pointer;
+      box-shadow: 0 4px 12px var(--shadow);
+      z-index: 50;
+      transition: all 0.2s ease;
+    }
+
+    .sound-toggle:hover {
+      transform: scale(1.1);
+    }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="sound-toggle" id="soundToggle" onclick="toggleSound()" title="开关音效">🔊</div>
+
+  <div class="game-container">
+    <header>
+      <h1>🌈 数学小镇日常</h1>
+      <p class="subtitle">用数学帮小镇居民解决问题，建设你的小镇</p>
+    </header>
+
+    <div class="nav-tabs">
+      <button class="nav-tab active" id="tab-bakery" onclick="switchView('bakery')">🧁 烘焙店</button>
+      <button class="nav-tab" id="tab-town" onclick="switchView('town')">🏘️ 我的小镇</button>
+    </div>
+
+    <!-- 烘焙店视图 -->
+    <div class="view active" id="bakery-view">
+      <div style="text-align: center;">
+        <div class="level-badge" id="levelBadge">第 1 关</div>
+      </div>
+
+      <div class="story-card" id="storyCard">
+        <p class="story-text" id="storyText"></p>
+        <div class="people-row" id="peopleRow"></div>
+      </div>
+
+      <div class="difficulty-selector" id="difficultySelector">
+        <button class="difficulty-btn" data-diff="easy" onclick="setDifficulty('easy')">⭐ 简单</button>
+        <button class="difficulty-btn active" data-diff="standard" onclick="setDifficulty('standard')">⭐⭐ 标准</button>
+        <button class="difficulty-btn" data-diff="hard" onclick="setDifficulty('hard')">⭐⭐⭐ 挑战</button>
+      </div>
+
+      <div class="recipe-board">
+        <div class="recipe-card original">
+          <div class="recipe-title">📖 原配方</div>
+          <div id="originalRecipe"></div>
+        </div>
+        <div class="recipe-card target" id="targetCard">
+          <div class="recipe-title">🎯 目标配方</div>
+          <div id="targetRecipe"></div>
+        </div>
+      </div>
+
+      <div class="hint-bar" id="hintBar">
+        <p class="hint-text" id="hintText">调整每种材料的数量，让比例保持不变</p>
+      </div>
+
+      <div class="action-area">
+        <button class="btn btn-bake" id="bakeBtn" onclick="checkAnswer()">🔥 开始烘焙</button>
+        <div class="progress-dots" id="progressDots"></div>
+      </div>
+
+      <div class="math-note" id="mathNote">
+        <strong>💡 数学小贴士：</strong>比例就像放大镜，所有材料要一起变大或一起变小，蛋糕味道才不会变。
+      </div>
+    </div>
+
+    <!-- 小镇视图 -->
+    <div class="view" id="town-view">
+      <div class="town-grid" id="townGrid"></div>
+      <div class="town-stats">
+        <h3>🏆 小镇成就</h3>
+        <p id="townStatsText">已完成 0 个任务，解锁 1 个建筑</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 反馈弹窗 -->
+  <div class="modal-overlay" id="modal">
+    <div class="modal">
+      <div id="modalIcon" class="modal-emoji">🎉</div>
+      <h2 class="modal-title" id="modalTitle">太棒了！</h2>
+      <div class="star-rating" id="starRating"></div>
+      <p class="modal-text" id="modalText"></p>
+      <div class="feedback-detail" id="feedbackDetail"></div>
+      <div class="modal-actions" id="modalActions"></div>
+    </div>
+  </div>
+
+  <script>
+    // ==================== 音效系统 ====================
+    let audioCtx = null;
+    let soundEnabled = true;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      document.getElementById('soundToggle').textContent = soundEnabled ? '🔊' : '🔇';
+      if (soundEnabled) {
+        initAudio();
+        playTone(523, 0.1, 'sine');
+      }
+    }
+
+    function playTone(freq, duration, type = 'sine', volume = 0.3) {
+      if (!soundEnabled || !audioCtx) return;
+      
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      
+      gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+      
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + duration);
+    }
+
+    function playClickSound() {
+      initAudio();
+      playTone(800, 0.08, 'sine', 0.2);
+    }
+
+    function playCorrectSound() {
+      initAudio();
+      // 清脆的 "叮"
+      playTone(880, 0.1, 'sine', 0.25);
+      setTimeout(() => playTone(1175, 0.15, 'sine', 0.25), 80);
+    }
+
+    function playWrongSound() {
+      initAudio();
+      // 低沉的 "咚"
+      playTone(200, 0.25, 'triangle', 0.3);
+      setTimeout(() => playTone(150, 0.3, 'triangle', 0.3), 120);
+    }
+
+    function playSuccessSound() {
+      initAudio();
+      // 欢快的上升音阶
+      const notes = [523, 659, 784, 1047];
+      notes.forEach((freq, i) => {
+        setTimeout(() => playTone(freq, 0.2, 'sine', 0.25), i * 120);
+      });
+    }
+
+    function playUnlockSound() {
+      initAudio();
+      // 解锁的魔法音效
+      const notes = [392, 523, 659, 784, 1047];
+      notes.forEach((freq, i) => {
+        setTimeout(() => playTone(freq, 0.15, 'triangle', 0.2), i * 100);
+      });
+    }
+
+    function playLevelUpSound() {
+      initAudio();
+      // 胜利音效
+      playTone(523, 0.15, 'sine', 0.25);
+      setTimeout(() => playTone(659, 0.15, 'sine', 0.25), 150);
+      setTimeout(() => playTone(784, 0.3, 'sine', 0.3), 300);
+    }
+
+    // 小镇建筑定义
+    const townBuildings = [
+      { id: 'bakery', name: '幸福面包店', icon: '🧁', level: 0, desc: '用比例做出美味蛋糕' },
+      { id: 'garden', name: '彩虹花园', icon: '🌻', level: 1, desc: '用比例调配植物营养液' },
+      { id: 'music', name: '音乐广场', icon: '🎵', level: 2, desc: '用比例调整节拍速度' },
+      { id: 'potion', name: '魔法药水屋', icon: '🧪', level: 3, desc: '用比例配制神秘药水' }
+    ];
+
+    // 关卡定义
+    const levels = [
+      {
+        id: 1,
+        title: "蛋糕要加倍",
+        baseServings: 2,
+        targetServings: 4,
+        factor: 2,
+        building: 'bakery',
+        mathTip: "比例就像放大镜，所有材料要一起变大或一起变小，蛋糕味道才不会变。",
+        variants: {
+          easy: {
+            story: "奶奶的原配方是 <strong>2 人份</strong>。今天来了 <strong>4 位</strong>小朋友，需要把材料都变成几倍？",
+            ingredients: [
+              { name: "面粉", unit: "杯", base: 2, icon: "🌾" },
+              { name: "鸡蛋", unit: "个", base: 2, icon: "🥚" }
+            ]
+          },
+          standard: {
+            story: "奶奶的原配方是 <strong>2 人份</strong>。今天来了 <strong>4 位</strong>小朋友，每种材料要放多少？",
+            ingredients: [
+              { name: "面粉", unit: "杯", base: 2, icon: "🌾" },
+              { name: "鸡蛋", unit: "个", base: 2, icon: "🥚" },
+              { name: "牛奶", unit: "杯", base: 1, icon: "🥛" },
+              { name: "糖", unit: "勺", base: 3, icon: "🍬" }
+            ]
+          },
+          hard: {
+            story: "奶奶的原配方是 <strong>2 人份</strong>。今天来了 <strong>4 位</strong>小朋友，而且奶奶想做多 1 份备用。一共要放多少？",
+            ingredients: [
+              { name: "面粉", unit: "杯", base: 2, icon: "🌾" },
+              { name: "鸡蛋", unit: "个", base: 2, icon: "🥚" },
+              { name: "牛奶", unit: "杯", base: 1, icon: "🥛" },
+              { name: "糖", unit: "勺", base: 3, icon: "🍬" },
+              { name: "黄油", unit: "块", base: 2, icon: "🧈" }
+            ],
+            constraint: "提示：要准备 5 人份哦！"
+          }
+        }
+      },
+      {
+        id: 2,
+        title: "花园营养液",
+        baseServings: 3,
+        targetServings: 6,
+        factor: 2,
+        building: 'garden',
+        mathTip: "先算目标份数是原配方的几倍，再用这个倍数乘每种材料。",
+        variants: {
+          easy: {
+            story: "花园营养液原配方是 <strong>3 盆花</strong> 的量。现在要浇 <strong>6 盆</strong>花，材料怎么调整？",
+            ingredients: [
+              { name: "水", unit: "杯", base: 3, icon: "💧" },
+              { name: "肥料", unit: "勺", base: 1, icon: "🌿" }
+            ]
+          },
+          standard: {
+            story: "花园营养液原配方是 <strong>3 盆花</strong> 的量。现在要浇 <strong>6 盆</strong>花，材料怎么调整？",
+            ingredients: [
+              { name: "水", unit: "杯", base: 3, icon: "💧" },
+              { name: "肥料", unit: "勺", base: 2, icon: "🌿" },
+              { name: "营养粉", unit: "勺", base: 1, icon: "✨" },
+              { name: "阳光精华", unit: "滴", base: 4, icon: "☀️" }
+            ]
+          },
+          hard: {
+            story: "花园营养液原配方是 <strong>3 盆花</strong> 的量。现在要浇 <strong>9 盆</strong>花，材料怎么调整？",
+            ingredients: [
+              { name: "水", unit: "杯", base: 3, icon: "💧" },
+              { name: "肥料", unit: "勺", base: 2, icon: "🌿" },
+              { name: "营养粉", unit: "勺", base: 1, icon: "✨" },
+              { name: "阳光精华", unit: "滴", base: 4, icon: "☀️" }
+            ],
+            constraint: "提示：这次要放大 3 倍哦！"
+          }
+        }
+      },
+      {
+        id: 3,
+        title: "音乐节拍",
+        baseServings: 4,
+        targetServings: 2,
+        factor: 0.5,
+        building: 'music',
+        mathTip: "比例可以放大，也可以缩小。缩小的时候，所有材料要一起变小。",
+        variants: {
+          easy: {
+            story: "一段音乐原长 <strong>4 拍</strong>。现在要做成 <strong>2 拍</strong> 的简短版，各乐器响几次？",
+            ingredients: [
+              { name: "鼓声", unit: "次", base: 4, icon: "🥁" },
+              { name: "铃声", unit: "次", base: 2, icon: "🛎️" }
+            ]
+          },
+          standard: {
+            story: "一段音乐原长 <strong>4 拍</strong>。现在要做成 <strong>2 拍</strong> 的简短版，各乐器响几次？",
+            ingredients: [
+              { name: "鼓声", unit: "次", base: 4, icon: "🥁" },
+              { name: "铃声", unit: "次", base: 2, icon: "🛎️" },
+              { name: "拍手", unit: "次", base: 6, icon: "👏" },
+              { name: "哨声", unit: "次", base: 2, icon: "📢" }
+            ]
+          },
+          hard: {
+            story: "一段音乐原长 <strong>4 拍</strong>。现在要做成 <strong>1 拍</strong> 的超短版，各乐器响几次？",
+            ingredients: [
+              { name: "鼓声", unit: "次", base: 4, icon: "🥁" },
+              { name: "铃声", unit: "次", base: 2, icon: "🛎️" },
+              { name: "拍手", unit: "次", base: 6, icon: "👏" },
+              { name: "哨声", unit: "次", base: 2, icon: "📢" }
+            ],
+            constraint: "提示：这次要缩小到 1/4 哦！"
+          }
+        }
+      },
+      {
+        id: 4,
+        title: "魔法药水",
+        baseServings: 2,
+        targetServings: 8,
+        factor: 4,
+        building: 'potion',
+        mathTip: "材料越多，越要仔细检查每一种是不是都乘了同一个数。",
+        variants: {
+          easy: {
+            story: "魔法药水原配方是 <strong>2 瓶</strong> 的量。现在要配 <strong>8 瓶</strong>，材料怎么变？",
+            ingredients: [
+              { name: "星尘", unit: "勺", base: 2, icon: "⭐" },
+              { name: "月光露", unit: "滴", base: 4, icon: "🌙" }
+            ]
+          },
+          standard: {
+            story: "魔法药水原配方是 <strong>2 瓶</strong> 的量。现在要配 <strong>8 瓶</strong>，材料怎么变？",
+            ingredients: [
+              { name: "星尘", unit: "勺", base: 1, icon: "⭐" },
+              { name: "月光露", unit: "滴", base: 2, icon: "🌙" },
+              { name: "彩虹粉", unit: "勺", base: 2, icon: "🌈" },
+              { name: "龙鳞", unit: "片", base: 2, icon: "🐉" },
+              { name: "凤凰泪", unit: "滴", base: 3, icon: "🔥" }
+            ]
+          },
+          hard: {
+            story: "魔法药水原配方是 <strong>2 瓶</strong> 的量。现在要配 <strong>10 瓶</strong>，材料怎么变？",
+            ingredients: [
+              { name: "星尘", unit: "勺", base: 1, icon: "⭐" },
+              { name: "月光露", unit: "滴", base: 2, icon: "🌙" },
+              { name: "彩虹粉", unit: "勺", base: 2, icon: "🌈" },
+              { name: "龙鳞", unit: "片", base: 2, icon: "🐉" },
+              { name: "凤凰泪", unit: "滴", base: 3, icon: "🔥" }
+            ],
+            constraint: "提示：10 ÷ 2 = 5 倍哦！"
+          }
+        }
+      }
+    ];
+
+    // 游戏状态
+    let currentLevel = 0;
+    let currentDifficulty = 'standard';
+    let currentAmounts = [];
+    let completedLevels = new Set();
+    let unlockedBuildings = new Set(['bakery']);
+
+    function init() {
+      renderProgressDots();
+      renderTown();
+      loadLevel(currentLevel);
+      
+      // 首次点击页面任意位置初始化音频
+      document.body.addEventListener('click', initAudio, { once: true });
+    }
+
+    function switchView(view) {
+      playClickSound();
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      
+      if (view === 'bakery') {
+        document.getElementById('bakery-view').classList.add('active');
+        document.getElementById('tab-bakery').classList.add('active');
+      } else {
+        document.getElementById('town-view').classList.add('active');
+        document.getElementById('tab-town').classList.add('active');
+        renderTown();
+      }
+    }
+
+    function setDifficulty(diff) {
+      playClickSound();
+      currentDifficulty = diff;
+      document.querySelectorAll('.difficulty-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.diff === diff);
+      });
+      loadLevel(currentLevel);
+    }
+
+    function getEffectiveTarget(level, variant) {
+      if (variant.constraint) {
+        const match = variant.constraint.match(/(\d+)\s*人份/);
+        if (match) return parseInt(match[1]);
+        const match2 = variant.constraint.match(/(\d+)\s*盆/);
+        if (match2) return parseInt(match2[1]);
+        const match3 = variant.constraint.match(/(\d+)\s*拍/);
+        if (match3) return parseInt(match3[1]);
+        const match4 = variant.constraint.match(/(\d+)\s*瓶/);
+        if (match4) return parseInt(match4[1]);
+      }
+      return level.targetServings;
+    }
+
+    function getEffectiveFactor(level, variant) {
+      return getEffectiveTarget(level, variant) / level.baseServings;
+    }
+
+    function renderProgressDots() {
+      const dotsContainer = document.getElementById('progressDots');
+      dotsContainer.innerHTML = levels.map((_, i) => 
+        `<div class="dot ${i === currentLevel ? 'active' : ''} ${i < currentLevel ? 'completed' : ''}" id="dot-${i}"></div>`
+      ).join('');
+    }
+
+    function renderTown() {
+      const grid = document.getElementById('townGrid');
+      grid.innerHTML = townBuildings.map(b => {
+        const unlocked = unlockedBuildings.has(b.id);
+        return `
+          <div class="building ${unlocked ? 'unlocked' : 'locked'}" onclick="${unlocked ? `playUnlockSound(); switchView('bakery')` : 'playWrongSound()'}">
+            ${unlocked ? '' : '<div class="lock-icon">🔒</div>'}
+            <div class="building-icon">${b.icon}</div>
+            <div class="building-name">${b.name}</div>
+            <div class="building-status">${unlocked ? '✅ 已解锁' : `完成第 ${b.level + 1} 关解锁`}</div>
+            <div style="font-size: 0.8rem; color: #999; margin-top: 6px;">${b.desc}</div>
+          </div>
+        `;
+      }).join('');
+
+      const unlockedCount = unlockedBuildings.size;
+      document.getElementById('townStatsText').textContent = 
+        `已完成 ${completedLevels.size} 个任务，解锁 ${unlockedCount}/${townBuildings.length} 个建筑`;
+    }
+
+    function loadLevel(index) {
+      const level = levels[index];
+      const variant = level.variants[currentDifficulty];
+      const effectiveTarget = getEffectiveTarget(level, variant);
+      const factor = getEffectiveFactor(level, variant);
+      
+      document.getElementById('levelBadge').textContent = `第 ${level.id} 关：${level.title}`;
+      document.getElementById('storyText').innerHTML = variant.story;
+      document.getElementById('mathNote').innerHTML = `<strong>💡 数学小贴士：</strong>${level.mathTip}`;
+      
+      // 重置动画类
+      document.getElementById('storyCard').classList.remove('shake');
+      document.getElementById('targetCard').classList.remove('shake');
+      document.getElementById('hintBar').classList.remove('correct');
+      
+      // 渲染人数/目标数量
+      const peopleRow = document.getElementById('peopleRow');
+      peopleRow.innerHTML = '';
+      const icon = level.id === 2 ? '🌻' : level.id === 3 ? '🎵' : level.id === 4 ? '🔮' : '👧';
+      for (let i = 0; i < Math.min(effectiveTarget, 12); i++) {
+        peopleRow.innerHTML += `<span>${icon}</span>`;
+      }
+      if (effectiveTarget > 12) {
+        peopleRow.innerHTML += `<span>+${effectiveTarget - 12}</span>`;
+      }
+
+      // 初始化目标数量
+      currentAmounts = variant.ingredients.map(() => variant.ingredients[0].base);
+      
+      renderOriginalRecipe(level, variant);
+      renderTargetRecipe(level, variant);
+      updateHint();
+      updateProgressDots();
+      
+      document.getElementById('bakeBtn').disabled = false;
+      document.getElementById('bakeBtn').textContent = level.id === 3 ? '🎵 开始演奏' : level.id === 4 ? '🔮 开始配制' : '🔥 开始烘焙';
+    }
+
+    function renderOriginalRecipe(level, variant) {
+      const container = document.getElementById('originalRecipe');
+      container.innerHTML = variant.ingredients.map(ing => `
+        <div class="ingredient">
+          <div class="ingredient-info">
+            <span class="ingredient-icon">${ing.icon}</span>
+            <div>
+              <div class="ingredient-name">${ing.name}</div>
+              <div class="ingredient-unit">${ing.base} ${ing.unit}</div>
+            </div>
+          </div>
+          <div class="amount">${ing.base}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderTargetRecipe(level, variant) {
+      const container = document.getElementById('targetRecipe');
+      container.innerHTML = variant.ingredients.map((ing, i) => `
+        <div class="ingredient" id="ing-${i}">
+          <div class="ingredient-info">
+            <span class="ingredient-icon">${ing.icon}</span>
+            <div>
+              <div class="ingredient-name">${ing.name}</div>
+              <div class="ingredient-unit">${ing.unit}</div>
+            </div>
+          </div>
+          <div class="amount-control">
+            <button class="btn btn-small btn-minus" onclick="changeAmount(${i}, -1)">−</button>
+            <div class="amount" id="amount-${i}">${currentAmounts[i]}</div>
+            <button class="btn btn-small btn-plus" onclick="changeAmount(${i}, 1)">+</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function changeAmount(index, delta) {
+      playClickSound();
+      const newValue = currentAmounts[index] + delta;
+      if (newValue < 0) {
+        playWrongSound();
+        return;
+      }
+      if (newValue > 50) {
+        playWrongSound();
+        return;
+      }
+      
+      currentAmounts[index] = newValue;
+      const amountEl = document.getElementById(`amount-${index}`);
+      amountEl.textContent = newValue;
+      amountEl.classList.add('changed');
+      setTimeout(() => amountEl.classList.remove('changed'), 300);
+      
+      updateIngredientVisual(index);
+      updateHint();
+    }
+
+    function updateIngredientVisual(index) {
+      const level = levels[currentLevel];
+      const variant = level.variants[currentDifficulty];
+      const factor = getEffectiveFactor(level, variant);
+      const expected = variant.ingredients[index].base * factor;
+      const el = document.getElementById(`ing-${index}`);
+      const wasCorrect = el.classList.contains('correct');
+      el.classList.remove('correct', 'wrong');
+      if (currentAmounts[index] === expected) {
+        el.classList.add('correct');
+        if (!wasCorrect) {
+          playCorrectSound();
+        }
+      } else if (currentAmounts[index] !== variant.ingredients[index].base) {
+        el.classList.add('wrong');
+      }
+    }
+
+    function updateHint() {
+      const level = levels[currentLevel];
+      const variant = level.variants[currentDifficulty];
+      const factor = getEffectiveFactor(level, variant);
+      const effectiveTarget = getEffectiveTarget(level, variant);
+      const hintBar = document.getElementById('hintBar');
+      
+      const correctCount = currentAmounts.filter((amount, i) => {
+        return amount === variant.ingredients[i].base * factor;
+      }).length;
+      
+      const hintText = document.getElementById('hintText');
+      if (variant.constraint) {
+        hintText.innerHTML = `💡 ${variant.constraint}`;
+        hintBar.classList.remove('correct');
+      } else if (correctCount === 0) {
+        hintText.innerHTML = `提示：${effectiveTarget} 是 ${level.baseServings} 的 <strong>${factor} 倍</strong>`;
+        hintBar.classList.remove('correct');
+      } else if (correctCount < variant.ingredients.length) {
+        hintText.innerHTML = `已经有 <strong>${correctCount}</strong> 种材料调对了，再看看其他的！`;
+        hintBar.classList.remove('correct');
+      } else {
+        hintText.innerHTML = '✨ 所有材料都对了！快点击开始吧！';
+        hintBar.classList.add('correct');
+      }
+    }
+
+    function checkAnswer() {
+      const level = levels[currentLevel];
+      const variant = level.variants[currentDifficulty];
+      const factor = getEffectiveFactor(level, variant);
+      const effectiveTarget = getEffectiveTarget(level, variant);
+      
+      const errors = [];
+      let allCorrect = true;
+      
+      variant.ingredients.forEach((ing, i) => {
+        const expected = ing.base * factor;
+        if (currentAmounts[i] !== expected) {
+          allCorrect = false;
+          const diff = currentAmounts[i] - expected;
+          if (diff > 0) {
+            errors.push(`${ing.name} 太多了，应该减少 ${diff} ${ing.unit}`);
+          } else {
+            errors.push(`${ing.name} 太少了，应该增加 ${Math.abs(diff)} ${ing.unit}`);
+          }
+        }
+      });
+
+      if (allCorrect) {
+        playSuccessSound();
+        showSuccess();
+      } else {
+        playWrongSound();
+        showRetry(errors, effectiveTarget, level);
+      }
+    }
+
+    function calculateStars() {
+      let baseStars = currentDifficulty === 'easy' ? 1 : currentDifficulty === 'standard' ? 2 : 3;
+      return '⭐'.repeat(baseStars);
+    }
+
+    function showSuccess() {
+      const level = levels[currentLevel];
+      const variant = level.variants[currentDifficulty];
+      const factor = getEffectiveFactor(level, variant);
+      const effectiveTarget = getEffectiveTarget(level, variant);
+      
+      completedLevels.add(currentLevel);
+      
+      // 解锁建筑
+      const building = townBuildings.find(b => b.level === currentLevel);
+      const newlyUnlocked = building && !unlockedBuildings.has(building.id);
+      if (building) {
+        unlockedBuildings.add(building.id);
+      }
+      
+      let successMsg = '';
+      if (level.id === 3) {
+        successMsg = `${effectiveTarget} ÷ ${level.baseServings} = ${factor}，所有乐器都乘以/除以了 ${factor}！`;
+      } else if (level.id === 4) {
+        successMsg = `${effectiveTarget} ÷ ${level.baseServings} = ${factor}，药水比例完美！`;
+      } else {
+        successMsg = `${effectiveTarget} ÷ ${level.baseServings} = ${factor}，所以每种材料都乘以/除以了 ${factor}！`;
+      }
+
+      document.getElementById('modalIcon').className = 'modal-cake';
+      document.getElementById('modalIcon').textContent = level.id === 3 ? '🎵' : level.id === 4 ? '🔮' : '🎂';
+      document.getElementById('modalTitle').textContent = level.id === 3 ? '演奏成功！' : level.id === 4 ? '药水配好了！' : '蛋糕烤好啦！';
+      document.getElementById('starRating').textContent = calculateStars();
+      document.getElementById('modalText').innerHTML = successMsg;
+      document.getElementById('feedbackDetail').innerHTML = newlyUnlocked 
+        ? `<div style="text-align:center;color:#4CAF50;font-weight:bold;">🎉 解锁新建筑：${building ? building.name : ''}！</div>`
+        : '';
+      
+      const actions = document.getElementById('modalActions');
+      if (currentLevel < levels.length - 1) {
+        actions.innerHTML = `
+          <button class="btn btn-town" onclick="goToTown()">🏘️ 看小镇</button>
+          <button class="btn btn-next" onclick="nextLevel()">下一关 →</button>
+        `;
+      } else {
+        actions.innerHTML = `
+          <button class="btn btn-town" onclick="goToTown()">🏘️ 看小镇</button>
+          <button class="btn btn-next" onclick="restartGame()">🔄 再玩一次</button>
+        `;
+      }
+      
+      document.getElementById('modal').classList.add('show');
+      createConfetti();
+    }
+
+    function showRetry(errors, target, level) {
+      const variant = level.variants[currentDifficulty];
+      const factor = getEffectiveFactor(level, variant);
+      
+      document.getElementById('modalIcon').className = 'modal-emoji';
+      document.getElementById('modalIcon').textContent = level.id === 3 ? '🎧' : level.id === 4 ? '⚗️' : '🍰';
+      document.getElementById('modalTitle').textContent = level.id === 3 ? '节奏不太对' : level.id === 4 ? '药水比例不对' : '再想想看';
+      document.getElementById('starRating').textContent = '';
+      document.getElementById('modalText').innerHTML = `比例要一致哦！目标份数是原配方的 <strong>${factor} 倍</strong>。`;
+      document.getElementById('feedbackDetail').innerHTML = `
+        <ul>${errors.map(e => `<li>${e}</li>`).join('')}</ul>
+      `;
+      document.getElementById('modalActions').innerHTML = `
+        <button class="btn btn-retry" onclick="closeModal()">再试一次</button>
+      `;
+      document.getElementById('modal').classList.add('show');
+      
+      // 触发震动动画
+      document.getElementById('storyCard').classList.remove('shake');
+      document.getElementById('targetCard').classList.remove('shake');
+      void document.getElementById('storyCard').offsetWidth; // 强制重排
+      document.getElementById('storyCard').classList.add('shake');
+      document.getElementById('targetCard').classList.add('shake');
+    }
+
+    function closeModal() {
+      playClickSound();
+      document.getElementById('modal').classList.remove('show');
+    }
+
+    function nextLevel() {
+      closeModal();
+      currentLevel++;
+      playLevelUpSound();
+      loadLevel(currentLevel);
+    }
+
+    function restartGame() {
+      closeModal();
+      currentLevel = 0;
+      currentDifficulty = 'standard';
+      completedLevels.clear();
+      unlockedBuildings = new Set(['bakery']);
+      setDifficulty('standard');
+      loadLevel(currentLevel);
+      renderTown();
+    }
+
+    function goToTown() {
+      closeModal();
+      playUnlockSound();
+      switchView('town');
+      renderTown();
+    }
+
+    function updateProgressDots() {
+      levels.forEach((_, i) => {
+        const dot = document.getElementById(`dot-${i}`);
+        dot.classList.remove('active', 'completed');
+        if (i === currentLevel) dot.classList.add('active');
+        if (i < currentLevel) dot.classList.add('completed');
+      });
+    }
+
+    function createConfetti() {
+      const colors = ['#FFB7C5', '#A0E7E5', '#FFE699', '#B4F8C8', '#FFD93D'];
+      for (let i = 0; i < 30; i++) {
+        setTimeout(() => {
+          const confetti = document.createElement('div');
+          confetti.className = 'confetti';
+          confetti.style.left = Math.random() * 100 + 'vw';
+          confetti.style.top = '-10px';
+          confetti.style.width = '12px';
+          confetti.style.height = '12px';
+          confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+          confetti.style.borderRadius = '50%';
+          confetti.style.transition = 'all 1.5s ease-out';
+          document.body.appendChild(confetti);
+          
+          setTimeout(() => {
+            confetti.style.transform = `translateY(${window.innerHeight}px) rotate(${Math.random() * 360}deg)`;
+            confetti.style.opacity = '0';
+          }, 50);
+          
+          setTimeout(() => confetti.remove(), 1600);
+        }, i * 50);
+      }
+    }
+
+    // 启动游戏
+    init();
+  </script>
+</body>
+</html>
