@@ -1,0 +1,4 @@
+interface:
+  display_name: "用历史讲懂数学"
+  short_description: "用关键转折、失败尝试与证据边界讲清抽象数学概念的演化"
+  default_prompt: "使用 $explain-math-through-history 把这个数学概念讲成一条兼具技术解释和史料边界的历史故事。"
