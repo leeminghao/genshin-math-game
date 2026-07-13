@@ -20,20 +20,19 @@ struct IngredientRow: View {
                     .rotationEffect(.degrees(iconSpin ? 20 : 0))
                     .scaleEffect(iconSpin ? 1.2 : 1.0)
                 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(ingredient.name)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(Color(hex: "8B4513"))
-                    
-                    if isOriginal {
+                if isOriginal {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(ingredient.name)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(Color(hex: "8B4513"))
+                        
                         Text("\(ingredient.baseAmount) \(ingredient.unit)")
                             .font(.system(size: 12))
                             .foregroundColor(.gray)
-                    } else {
-                        Text(ingredient.unit)
-                            .font(.system(size: 12))
-                            .foregroundColor(.gray)
                     }
+                } else {
+                    // 目标配方只显示图标，避免卡片空间不足
+                    EmptyView()
                 }
             }
             

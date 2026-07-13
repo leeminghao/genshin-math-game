@@ -12,6 +12,11 @@ class SoundManager: ObservableObject {
     }
     
     private func setupAudioEngine() {
+        #if targetEnvironment(simulator)
+        // Simulator audio environment lacks a usable output node; skip synthesis.
+        print("Sound disabled on iOS Simulator")
+        return
+        #endif
         audioEngine = AVAudioEngine()
         do {
             try audioEngine?.start()
@@ -42,8 +47,8 @@ class SoundManager: ObservableObject {
             data?[i] = Float(value * envelope)
         }
         
-        player.scheduleBuffer(buffer, at: nil, options: .completionHandler) { [weak self] in
-            DispatchQueue.main.async {
+        player.scheduleBuffer(buffer, at: nil, options: [], completionCallbackType: .dataPlayedBack) { _ in
+            DispatchQueue.main.async { [weak self] in
                 self?.playerNodes.removeAll { $0 == player }
                 engine.detach(player)
             }
