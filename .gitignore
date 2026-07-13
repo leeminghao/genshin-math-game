@@ -1,0 +1,6 @@
+*.DS_Store
+.DS_Store
+prototypes/my-math-island-wechat-game/project.private.config.json
+prototypes/my-math-island-wechat-game/.env
+prototypes/little-civilization-island-wechat-game/project.private.config.json
+prototypes/little-civilization-island-wechat-game/.env
