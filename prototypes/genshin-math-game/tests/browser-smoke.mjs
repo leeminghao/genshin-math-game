@@ -1,0 +1,626 @@
+import assert from 'node:assert/strict';
+import { mkdir, writeFile } from 'node:fs/promises';
+
+const cdpPort = Number(process.env.CDP_PORT || 9333);
+const targetUrlPart = process.env.GAME_URL_PART || 'genshin-math-game';
+const targets = await fetch(`http://127.0.0.1:${cdpPort}/json`).then(response => response.json());
+const target = targets.find(item => item.type === 'page' && item.url.includes(targetUrlPart))
+  || targets.find(item => item.type === 'page');
+if (!target) throw new Error('找不到游戏页面的 Chrome 调试目标');
+
+const socket = new WebSocket(target.webSocketDebuggerUrl);
+let sequence = 0;
+const pending = new Map();
+const runtimeExceptions = [];
+const screenshotDir = process.env.SCREENSHOT_DIR || '';
+if (screenshotDir) await mkdir(screenshotDir, { recursive: true });
+
+socket.onmessage = event => {
+  const message = JSON.parse(event.data);
+  if (message.method === 'Runtime.exceptionThrown') {
+    runtimeExceptions.push(message.params.exceptionDetails.exception?.description || message.params.exceptionDetails.text);
+  }
+  if (!message.id || !pending.has(message.id)) return;
+  const { resolve, reject } = pending.get(message.id);
+  pending.delete(message.id);
+  if (message.error) reject(new Error(message.error.message));
+  else resolve(message.result);
+};
+
+await new Promise((resolve, reject) => {
+  socket.onopen = resolve;
+  socket.onerror = reject;
+});
+
+function send(method, params = {}) {
+  return new Promise((resolve, reject) => {
+    const id = ++sequence;
+    pending.set(id, { resolve, reject });
+    socket.send(JSON.stringify({ id, method, params }));
+  });
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+await send('Runtime.enable');
+await send('Page.enable');
+await send('Emulation.setDeviceMetricsOverride', {
+  width: 1440, height: 900, deviceScaleFactor: 1, mobile: false
+});
+
+async function capture(name) {
+  if (!screenshotDir) return;
+  // 页面切换有 0.5 秒淡出；等待稳定帧，避免把上一屏重影误判为视觉缺陷。
+  await sleep(650);
+  // WebGL 截图在部分软件渲染环境成本很高；CI 可不设置 SCREENSHOT_DIR，
+  // 交互判定不依赖截图，视觉检查在缩小视口后单独执行。
+  const shot = await send('Page.captureScreenshot', {
+    format: 'png', fromSurface: true, captureBeyondViewport: false
+  });
+  await writeFile(`${screenshotDir}/${name}.png`, Buffer.from(shot.data, 'base64'));
+}
+
+async function evaluate(expression) {
+  const response = await send('Runtime.evaluate', {
+    expression,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  if (response.exceptionDetails) {
+    throw new Error(response.exceptionDetails.exception?.description || response.exceptionDetails.text);
+  }
+  return response.result.value;
+}
+
+async function waitFor(expression, timeoutMs = 12000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (await evaluate(expression)) return;
+    await sleep(80);
+  }
+  throw new Error(`等待超时：${expression}`);
+}
+
+async function fresh(save = null, { skipDiagnostic = true } = {}) {
+  await evaluate(
+    'localStorage.clear();localStorage.setItem("genshinMathTutorialSeen","1");' +
+    (save ? `localStorage.setItem("genshinMathSave",${JSON.stringify(JSON.stringify(save))});` : '')
+  );
+  await send('Page.reload', { ignoreCache: true });
+  await waitFor('document.querySelector(".screen.active")?.id === "main-menu"');
+  if (save) {
+    await evaluate('document.querySelector("#btn-continue").click()');
+  } else {
+    await evaluate('document.querySelector("#btn-start").click()');
+    await waitFor('document.querySelector(".screen.active")?.id === "diagnostic-screen"');
+    if (!skipDiagnostic) return;
+    await evaluate('document.querySelector("#btn-diagnostic-skip").click()');
+  }
+  await waitFor(`document.querySelector(".screen.active")?.id === "world-map"
+    && window.__game?.session.mapActive === true`);
+}
+
+async function finishDialog() {
+  for (let guard = 0; guard < 30; guard++) {
+    if (await evaluate('document.querySelector(".screen.active")?.id !== "dialog-screen"')) return;
+    if (await evaluate('window.__game.session.typing')) {
+      await evaluate('document.querySelector("#dialog-screen").click()');
+      await sleep(20);
+    }
+    await evaluate('document.querySelector("#dialog-screen").click()');
+    await sleep(40);
+  }
+  throw new Error('对话未在预期次数内结束');
+}
+
+async function press(key, code, keyCode, durationMs) {
+  await send('Input.dispatchKeyEvent', {
+    type: 'keyDown', key, code,
+    windowsVirtualKeyCode: keyCode,
+    nativeVirtualKeyCode: keyCode
+  });
+  await sleep(durationMs);
+  await send('Input.dispatchKeyEvent', {
+    type: 'keyUp', key, code,
+    windowsVirtualKeyCode: keyCode,
+    nativeVirtualKeyCode: keyCode
+  });
+  await sleep(120);
+}
+
+async function enterWindRegion() {
+  // 必须在同一个 JS 回合内完成"设状态 + 点击"：否则地图循环的 checkLandmarkProximity
+  // 会在两次 evaluate 之间把 currentLandmark 重置为 null 并隐藏进入提示（竞态）
+  await evaluate(`Object.assign(window.__game.session,{
+    playerX:350,playerY:300,targetX:350,targetY:300,isMoving:false,moveMode:null,
+    currentLandmark:0,controlsLocked:false
+  });window.__game.updatePlayerSprite();
+  document.querySelector("#region-enter-prompt").classList.remove("hidden");
+  document.querySelector("#btn-enter-region").click()`);
+  await waitFor('document.querySelector(".screen.active")?.id === "region-detail"');
+}
+
+async function choosePrediction() {
+  await waitFor('window.__game.session.missionPhase === "prediction"');
+  await evaluate(`(() => {
+    const mission = window.__game.session.currentPuzzle;
+    [...document.querySelectorAll('.prediction-option')]
+      .find(button => button.textContent === String(mission.prediction.answer)).click();
+  })()`);
+  await waitFor('window.__game.session.missionPhase === "operate"');
+}
+
+async function solveVisibleInteraction() {
+  const type = await evaluate('window.__game.session.missionInteraction.type');
+  if (type === 'match') {
+    for (let guard = 0; guard < 30; guard++) {
+      const remaining = await evaluate('document.querySelectorAll(".puzzle-token:not(.used):not(:disabled)").length');
+      if (!remaining) break;
+      await evaluate('document.querySelector(".puzzle-token:not(.used):not(:disabled)").click()');
+    }
+  } else if (type === 'partWhole') {
+    const remaining = await evaluate(`(() => {
+      const config = window.__game.session.missionPhase === 'transfer'
+        ? window.__game.session.currentPuzzle.transfer : window.__game.session.currentPuzzle.primary;
+      return config.changeCount - window.__game.session.missionInteraction.moved;
+    })()`);
+    for (let index = 0; index < remaining; index++) {
+      await evaluate('document.querySelector("[data-part-action=move]").click()');
+    }
+  } else if (type === 'array') {
+    const delta = await evaluate(`(() => {
+      const config = window.__game.session.missionPhase === 'transfer'
+        ? window.__game.session.currentPuzzle.transfer : window.__game.session.currentPuzzle.primary;
+      const value = window.__game.session.missionInteraction;
+      return { rows: config.targetRows - value.rows, cols: config.targetCols - value.cols };
+    })()`);
+    const rowAction = delta.rows >= 0 ? 'rows-up' : 'rows-down';
+    const colAction = delta.cols >= 0 ? 'cols-up' : 'cols-down';
+    for (let index = 0; index < Math.abs(delta.rows); index++) {
+      await evaluate(`document.querySelector('[data-array="${rowAction}"]').click()`);
+    }
+    for (let index = 0; index < Math.abs(delta.cols); index++) {
+      await evaluate(`document.querySelector('[data-array="${colAction}"]').click()`);
+    }
+  } else if (type === 'split') {
+    const needs = await evaluate(`(() => {
+      const config = window.__game.session.missionPhase === 'transfer'
+        ? window.__game.session.currentPuzzle.transfer : window.__game.session.currentPuzzle.primary;
+      const target = config.total / config.groups;
+      return window.__game.session.missionInteraction.assignments.map(value => target - value);
+    })()`);
+    for (let group = 0; group < needs.length; group++) {
+      for (let count = 0; count < needs[group]; count++) {
+        await evaluate(`document.querySelectorAll('.puzzle-zone')[${group}].querySelector('[data-action="add"]').click()`);
+      }
+    }
+  } else if (type === 'balance') {
+    const actions = await evaluate(`(() => {
+      const config = window.__game.session.missionPhase === 'transfer'
+        ? window.__game.session.currentPuzzle.transfer : window.__game.session.currentPuzzle.primary;
+      const value = window.__game.session.missionInteraction;
+      return {
+        side: value.left < config.target ? 'add-left' : 'add-right',
+        count: value.left < config.target ? config.target - value.left : config.target - value.right
+      };
+    })()`);
+    for (let index = 0; index < actions.count; index++) {
+      await evaluate(`document.querySelector('[data-balance="${actions.side}"]').click()`);
+    }
+  } else {
+    throw new Error(`未支持的任务交互类型：${type}`);
+  }
+}
+
+async function submitCorrectExpression({ wrongFirst = false } = {}) {
+  await waitFor('window.__game.session.missionPhase === "express"');
+  if (wrongFirst) {
+    await evaluate(`(() => {
+      const answer = window.__game.session.currentPuzzle.expression.answer;
+      [...document.querySelectorAll('.expression-option')]
+        .find(button => button.textContent !== String(answer)).click();
+    })()`);
+    await waitFor('!document.querySelector("#puzzle-error-card").classList.contains("hidden")');
+  }
+  await evaluate(`(() => {
+    const answer = window.__game.session.currentPuzzle.expression.answer;
+    [...document.querySelectorAll('.expression-option')]
+      .find(button => button.textContent === String(answer)).click();
+  })()`);
+  await waitFor('window.__game.session.missionPhase === "verify"');
+}
+
+async function finishCurrentMission({ wrongPrimary = false, wrongExpression = false, hintTier = 0 } = {}) {
+  await waitFor('document.querySelector(".screen.active")?.id === "puzzle-screen"');
+  if (await evaluate('window.__game.session.missionPhase === "prediction"')) await choosePrediction();
+
+  if (hintTier) {
+    // 先等瞬时弹窗（任务完成提示等）消失，避免与"任务提示不弹窗"的断言打架
+    await waitFor('document.querySelector("#hint-modal").classList.contains("hidden")');
+    await evaluate(`document.querySelector('[data-mission-hint-tier="${hintTier}"]').click()`);
+    await evaluate(`document.querySelector('[data-mission-hint-tier="${hintTier}"]').click()`);
+    assert.equal(await evaluate('window.__game.session.missionHintTier'), hintTier);
+    assert.equal(await evaluate('document.querySelector("#hint-modal").classList.contains("hidden")'), true,
+      '任务提示应在操作台内非阻塞呈现');
+    assert.equal(await evaluate(`document.querySelector('.puzzle-card').classList.contains('hint-tier-${hintTier}')`), true);
+    assert.ok((await evaluate('document.querySelector("#puzzle-guide-text").textContent')).length > 4);
+  }
+
+  if (wrongPrimary) {
+    await evaluate('document.querySelector("#btn-puzzle-check").click()');
+    await waitFor('document.querySelector("#puzzle-status").classList.contains("error")');
+  }
+  await solveVisibleInteraction();
+  await evaluate('document.querySelector("#btn-puzzle-check").click()');
+  await submitCorrectExpression({ wrongFirst: wrongExpression });
+  await evaluate('document.querySelector("#btn-puzzle-continue").click()');
+  await waitFor('window.__game.session.missionPhase === "transfer"');
+  await solveVisibleInteraction();
+  await evaluate('document.querySelector("#btn-puzzle-check").click()');
+  await waitFor('window.__game.session.missionPhase === "complete"');
+  const completion = await evaluate('document.querySelector("#puzzle-completion-note").textContent');
+  await evaluate('document.querySelector("#btn-puzzle-continue").click()');
+  await waitFor('document.querySelector(".screen.active")?.id === "reward-screen"');
+  return completion;
+}
+
+async function solveBattle() {
+  await waitFor('document.querySelector(".screen.active")?.id === "battle-screen"');
+  const count = await evaluate('window.__game.session.currentQuestions.length');
+  for (let index = 0; index < count; index++) {
+    await evaluate(`(() => {
+      const answer = window.__game.session.currentQuestions[window.__game.session.currentQuestionIndex].answer;
+      [...document.querySelectorAll('.answer-btn')].find(button => button.textContent == answer).click();
+    })()`);
+    if (index < count - 1) {
+      await waitFor(`window.__game.session.currentQuestionIndex === ${index + 1} && window.__game.session.answered === false`);
+    }
+  }
+  await waitFor('document.querySelector(".screen.active")?.id === "reward-screen"');
+}
+
+const report = {};
+const stage = name => console.error(`[browser] ${name}`);
+
+try {
+  if (screenshotDir) {
+    await evaluate('localStorage.clear();localStorage.setItem("genshinMathTutorialSeen","1")');
+    await send('Page.reload', { ignoreCache: true });
+    await waitFor('document.querySelector(".screen.active")?.id === "main-menu"');
+    report.menu = await evaluate(`(() => {
+      const hero = document.querySelector('.menu-hero-portrait');
+      const rect = hero.getBoundingClientRect();
+      return {
+        viewport: [innerWidth, innerHeight],
+        heroArt: getComputedStyle(hero).backgroundImage.includes('xiaoyuan-storybook-v2.webp'),
+        heroVisible: rect.right > 0 && rect.left < innerWidth && rect.bottom > 0 && rect.top < innerHeight,
+        horizontalOverflow: document.documentElement.scrollWidth > innerWidth
+      };
+    })()`);
+    assert.deepEqual(report.menu, {
+      viewport: [1440, 900], heroArt: true, heroVisible: true, horizontalOverflow: false
+    });
+    await capture('01-main-menu');
+  }
+  stage('能力观察与可改选路线');
+  await fresh(null, { skipDiagnostic: false });
+  for (let index = 0; index < 3; index++) {
+    await evaluate(`(() => {
+      const question = window.LearningSystems.DIAGNOSTIC_QUESTIONS[window.__game.session.diagnosticIndex];
+      [...document.querySelectorAll('.diagnostic-option')]
+        .find(button => button.textContent == question.answer).click();
+    })()`);
+  }
+  await waitFor('!document.querySelector("#diagnostic-result").classList.contains("hidden")');
+  report.diagnostic = await evaluate(`({
+    score: window.__game.session.diagnosticScore,
+    suggestion: window.__game.session.diagnosticSuggestedRegion,
+    title: document.querySelector('#diagnostic-result-title').textContent
+  })`);
+  assert.deepEqual(report.diagnostic, { score: 3, suggestion: 4, title: '建议从「澄水庭」附近开始' });
+  await evaluate('document.querySelector("#btn-diagnostic-wind").click()');
+  await waitFor('document.querySelector(".screen.active")?.id === "world-map" && window.__game?.session.mapActive === true');
+  assert.deepEqual(await evaluate(`({
+    current: window.__game.state.player.currentRegion,
+    suggested: window.__game.state.learning.suggestedRegion,
+    chosen: window.__game.state.learning.chosenStartRegion
+  })`), { current: 0, suggested: 4, chosen: 0 });
+
+  stage('地图角色、键盘移动与剧情不循环');
+  await fresh();
+  await capture('02-world-map');
+  report.ui = await evaluate(`({
+    groundCanvas: document.querySelector('#world-ground') instanceof HTMLCanvasElement
+      && document.querySelector('#world-ground').width > 3000,
+    noTileBg: getComputedStyle(document.querySelector('#world-canvas')).backgroundImage === 'none',
+    travelerArt: getComputedStyle(document.querySelector('.player-head')).backgroundImage.includes('xiaoyuan-storybook-v2.webp'),
+    mapInert: document.querySelector('#world-map').inert,
+    minimapSize: [document.querySelector('#minimap').width, document.querySelector('#minimap').height],
+    dpadButtons: document.querySelectorAll('[data-map-move]').length,
+    dpadTarget: Math.round(document.querySelector('[data-map-move="arrowup"]').getBoundingClientRect().width)
+  })`);
+  assert.deepEqual({ groundCanvas: report.ui.groundCanvas, noTileBg: report.ui.noTileBg, travelerArt: report.ui.travelerArt, mapInert: report.ui.mapInert, minimapSize: report.ui.minimapSize },
+    { groundCanvas: true, noTileBg: true, travelerArt: true, mapInert: false, minimapSize: [280, 175] });
+  assert.equal(report.ui.dpadButtons, 4);
+  assert.ok(report.ui.dpadTarget >= 50, '触屏方向键应提供儿童可稳定点击的大触点');
+  const movementStart = await evaluate('window.__game.session.playerX');
+  await press('d', 'KeyD', 68, 260);
+  assert.ok(await evaluate(`window.__game.session.playerX > ${movementStart}`), 'D 键应移动主角');
+  const dpadStart = await evaluate('window.__game.session.playerY');
+  await evaluate(`document.querySelector('[data-map-move="arrowdown"]').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:7}))`);
+  await sleep(240);
+  await evaluate(`document.querySelector('[data-map-move="arrowdown"]').dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:7}));
+    window.__game.session.moveKeys.arrowdown=false;
+    window.__game.session.isMoving=false;
+    window.__game.session.moveMode=null`);
+  await sleep(100);
+  assert.ok(await evaluate(`window.__game.session.playerY > ${dpadStart}`), '触屏方向盘应移动主角');
+  await evaluate('document.querySelector("#btn-map-settings").click()');
+  await evaluate('document.querySelector("#toggle-large-text").click();document.querySelector("#toggle-reduced-motion").click()');
+  report.accessibility = await evaluate(`({
+    largeText: document.documentElement.classList.contains('large-text'),
+    reducedMotion: document.documentElement.classList.contains('reduced-motion'),
+    largePressed: document.querySelector('#toggle-large-text').getAttribute('aria-pressed'),
+    motionPressed: document.querySelector('#toggle-reduced-motion').getAttribute('aria-pressed')
+  })`);
+  assert.deepEqual(report.accessibility, {
+    largeText: true, reducedMotion: true, largePressed: 'true', motionPressed: 'true'
+  });
+  await evaluate(`document.querySelector('#toggle-large-text').click();
+    document.querySelector('#toggle-reduced-motion').click();
+    Object.assign(window.__game.session,{
+      playerX:800,playerY:800,targetX:800,targetY:800,isMoving:false,moveMode:null
+    });
+    Object.keys(window.__game.session.moveKeys).forEach(key=>window.__game.session.moveKeys[key]=false);
+    window.__game.updatePlayerSprite();
+    document.querySelector('#btn-close-settings').click()`);
+  await evaluate(`Object.assign(window.__game.session,{
+    playerX:1400,playerY:2720,targetX:1400,targetY:2720,isMoving:false,moveMode:null
+  });window.__game.updatePlayerSprite()`);
+  await waitFor('document.querySelector(".screen.active")?.id === "dialog-screen"');
+  const storyPosition = await evaluate('[window.__game.session.playerX,window.__game.session.playerY]');
+  await finishDialog();
+  await waitFor('document.querySelector(".screen.active")?.id === "world-map"');
+  await sleep(260);
+  report.story = await evaluate(`({
+    seen: window.__game.state.map.seenStories,
+    position: [window.__game.session.playerX,window.__game.session.playerY],
+    screen: document.querySelector('.screen.active')?.id
+  })`);
+  assert.ok(report.story.seen.includes('intro'));
+  assert.deepEqual(report.story.position, storyPosition);
+  assert.equal(report.story.screen, 'world-map');
+
+  stage('任务检查点退出与恢复');
+  await enterWindRegion();
+  await evaluate('document.querySelectorAll(".level-item")[0].click()');
+  await choosePrediction();
+  await capture('03-puzzle-operate');
+  report.puzzleVisual = await evaluate(`({
+    guideArt: getComputedStyle(document.querySelector('.puzzle-guide-avatar')).backgroundImage.includes('xingya-wind-guide-v2.webp'),
+    windSeeds: document.querySelectorAll('.puzzle-token .math-object.wind-seed').length,
+    draggable: document.querySelector('.puzzle-token:not(.used)').draggable,
+    tokenSize: Math.round(document.querySelector('.puzzle-token:not(.used)').getBoundingClientRect().width),
+    horizontalOverflow: document.querySelector('.puzzle-card').scrollWidth > document.querySelector('.puzzle-card').clientWidth + 1,
+    hintsVisible: document.querySelector('#mission-hints').getBoundingClientRect().bottom <= innerHeight
+  })`);
+  assert.deepEqual({ guideArt: report.puzzleVisual.guideArt, windSeeds: report.puzzleVisual.windSeeds, draggable: report.puzzleVisual.draggable },
+    { guideArt: true, windSeeds: 6, draggable: true });
+  assert.ok(report.puzzleVisual.tokenSize >= 56, '数学物件应提供至少 56px 的主要操作触点');
+  assert.equal(report.puzzleVisual.horizontalOverflow, false, '桌面任务卡不应出现横向滚动');
+  assert.equal(report.puzzleVisual.hintsVisible, true, '分层提示应在操作首屏内可见');
+  await evaluate(`(() => {
+    const token = document.querySelector('.puzzle-token:not(.used)');
+    const zone = document.querySelector('.puzzle-zone.match-zone');
+    const transfer = new DataTransfer();
+    token.dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:transfer}));
+    zone.dispatchEvent(new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:transfer}));
+    zone.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:transfer}));
+  })()`);
+  assert.equal(await evaluate('window.__game.session.missionInteraction.assignments.filter(value => value !== null).length'), 1,
+    '拖放后应磁吸到一个空位置');
+  await evaluate('document.querySelector("#btn-puzzle-exit").click()');
+  await waitFor('document.querySelector(".screen.active")?.id === "region-detail"');
+  report.checkpointSaved = await evaluate(`(() => {
+    const cp = window.__game.state.learning.missionCheckpoints['0-0'];
+    return { phase: cp.phase, filled: cp.interaction.assignments.filter(value => value !== null).length,
+      label: document.querySelectorAll('.level-item')[0].textContent };
+  })()`);
+  assert.equal(report.checkpointSaved.phase, 'operate');
+  assert.equal(report.checkpointSaved.filled, 1);
+  assert.match(report.checkpointSaved.label, /继续上次：操作/);
+  await evaluate('document.querySelectorAll(".level-item")[0].click()');
+  await waitFor('window.__game.session.missionPhase === "operate"');
+  assert.equal(await evaluate('document.querySelectorAll(".puzzle-token.used").length'), 1);
+  report.firstMissionCompletion = await finishCurrentMission();
+  assert.match(report.firstMissionCompletion, /完成修复/);
+  assert.equal(await evaluate('window.__game.state.learning.missionCheckpoints["0-0"]'), undefined);
+
+  stage('五种数学交互与三类学习证据');
+  const missionOptions = [
+    { index: 1, options: { wrongExpression: true } },
+    { index: 2, options: {} },
+    { index: 3, options: { wrongPrimary: true } },
+    { index: 4, options: { hintTier: 1 } }
+  ];
+  for (const item of missionOptions) {
+    await evaluate('document.querySelector("#btn-reward-continue").click()');
+    await waitFor('document.querySelector(".screen.active")?.id === "region-detail"');
+    await evaluate(`document.querySelectorAll('.level-item')[${item.index}].click()`);
+    await finishCurrentMission(item.options);
+  }
+  // 风暴核心（最后一个任务）的结算文案要在战斗关卡之前读取
+  report.windMissionReward = await evaluate(`({
+    finalReward: document.querySelector('#reward-msg').textContent,
+    rewardCause: document.querySelector('#reward-change-title').textContent,
+    rewardChange: document.querySelector('#reward-world-change').dataset.change,
+    growthBadges: document.querySelectorAll('#reward-growth-badges .growth-badge').length
+  })`);
+  assert.match(report.windMissionReward.finalReward, /风暴核心恢复平衡/);
+  assert.match(report.windMissionReward.rewardCause, /两侧风压相等/);
+  assert.equal(report.windMissionReward.rewardChange, 'storm');
+  assert.equal(report.windMissionReward.growthBadges, 3);
+  // 风语原共 7 关：5 个任务关 + 2 个战斗关（连加连减、乘法口诀），全部通关才解锁岩岚港
+  for (const index of [5, 6]) {
+    await evaluate('document.querySelector("#btn-reward-continue").click()');
+    await waitFor('document.querySelector(".screen.active")?.id === "region-detail"');
+    await evaluate(`document.querySelectorAll('.level-item')[${index}].click()`);
+    await finishDialog();
+    await solveBattle();
+  }
+  report.windSlice = await evaluate(`({
+    completedLevels: window.__game.state.player.completedLevels,
+    completedMissions: window.__game.state.learning.completedPuzzles,
+    unlockedRegions: window.__game.state.player.unlockedRegions,
+    currentRegion: window.__game.state.player.currentRegion,
+    changes: window.__game.state.map.worldChanges,
+    errorTypes: [...new Set(window.__game.state.learning.errorLog.map(item => item.type))],
+    evidenceKinds: [...new Set(window.__game.state.learning.evidence.map(item => item.kind))],
+    checkpoints: window.__game.state.learning.missionCheckpoints
+  })`);
+  assert.deepEqual(report.windSlice.completedLevels.slice(0, 5), ['0-0', '0-1', '0-2', '0-3', '0-4']);
+  assert.deepEqual(report.windSlice.completedLevels, ['0-0', '0-1', '0-2', '0-3', '0-4', '0-5', '0-6']);
+  assert.equal(report.windSlice.completedMissions.length, 5);
+  assert.ok(report.windSlice.unlockedRegions.includes(1));
+  assert.equal(report.windSlice.currentRegion, 0, '解锁新区域后不应强制改变当前探索区域');
+  assert.deepEqual(report.windSlice.changes, { windmillRestored: true, bridgeOpened: true, stormCalmed: true });
+  assert.ok(report.windSlice.errorTypes.includes('language'));
+  assert.ok(report.windSlice.errorTypes.includes('representation'));
+  for (const kind of ['prediction', 'model', 'explanation', 'verification', 'transfer']) {
+    assert.ok(report.windSlice.evidenceKinds.includes(kind), `缺少 ${kind} 学习证据`);
+  }
+  assert.deepEqual(report.windSlice.checkpoints, {});
+  await capture('04-reward');
+
+  stage('返回探索、世界变化与学习档案');
+  await evaluate('document.querySelector("#btn-reward-map").click()');
+  await waitFor('document.querySelector(".screen.active")?.id === "world-map" && window.__game.session.mapActive');
+  await sleep(240);
+  report.worldChanges = await evaluate(`({
+    windmill: document.querySelector('#windmill-change').classList.contains('restored'),
+    bridge: document.querySelector('#wind-bridge-change').classList.contains('opened'),
+    storm: document.querySelector('#storm-core-change').classList.contains('calmed'),
+    position: [window.__game.session.playerX,window.__game.session.playerY]
+  })`);
+  assert.deepEqual(report.worldChanges.position, [350, 300]);
+  assert.equal(report.worldChanges.windmill, true);
+  assert.equal(report.worldChanges.bridge, true);
+  assert.equal(report.worldChanges.storm, true);
+  await press('s', 'KeyS', 83, 1600);
+  assert.ok(await evaluate('Math.hypot(window.__game.session.playerX-350,window.__game.session.playerY-300) > 100'));
+  await evaluate('document.querySelector("#btn-learning-profile").click()');
+  report.profile = await evaluate(`({
+    summary: document.querySelector('#learning-profile-summary').textContent.replace(/\s+/g,' ').trim(),
+    misconception: document.querySelector('#misconception-list').textContent,
+    rows: document.querySelectorAll('#mastery-list .mastery-row').length,
+    locked: window.__game.session.controlsLocked
+  })`);
+  assert.match(report.profile.summary, /迁移成功/);
+  assert.match(report.profile.summary, /下一次 5 分钟/);
+  assert.match(report.profile.misconception, /部分与整体|平均分/);
+  assert.equal(report.profile.rows, 7);
+  assert.equal(report.profile.locked, true);
+  await evaluate('document.querySelector("#btn-close-learning-profile").click()');
+
+  stage('重复任务不重复发放奖励');
+  const beforeReplay = await evaluate('({gems:window.__game.state.player.gems,exp:window.__game.state.player.exp})');
+  await enterWindRegion();
+  await evaluate('document.querySelectorAll(".level-item")[0].click()');
+  await finishCurrentMission();
+  report.replay = await evaluate(`({
+    gems: window.__game.state.player.gems,
+    exp: window.__game.state.player.exp,
+    reward: document.querySelector('#reward-items').textContent.replace(/\s+/g,' ').trim()
+  })`);
+  assert.deepEqual({ gems: report.replay.gems, exp: report.replay.exp }, beforeReplay);
+  assert.match(report.replay.reward, /已领取首通奖励/);
+
+  stage('非风区域保留分阶段挑战与主动退出');
+  await fresh();
+  await evaluate('window.__game.session.mapActive=false;window.__game.startLevel(1,0)');
+  await finishDialog();
+  await waitFor('document.querySelector(".screen.active")?.id === "battle-screen"');
+  await evaluate('window.confirm=()=>true;document.querySelector("#btn-battle-exit").click()');
+  await waitFor('document.querySelector(".screen.active")?.id === "region-detail"');
+  assert.equal(await evaluate('window.__game.state.player.completedLevels.includes("1-0")'), false);
+  await evaluate('window.__game.startLevel(1,0)');
+  await finishDialog();
+  await solveBattle();
+  assert.equal(await evaluate('window.__game.state.player.completedLevels.includes("1-0")'), true);
+
+  stage('弹窗锁移动、损坏存档与旧存档迁移');
+  await fresh();
+  await evaluate('document.querySelector("#btn-map-settings").click()');
+  const lockedStart = await evaluate('window.__game.session.playerX');
+  await press('d', 'KeyD', 68, 320);
+  assert.deepEqual(await evaluate(`({locked:window.__game.session.controlsLocked,x:window.__game.session.playerX})`), {
+    locked: true, x: lockedStart
+  });
+
+  await fresh({
+    player: { unlockedRegions: 7 }, map: { collectedItems: 'bad', openedChests: null },
+    achievements: {}, settings: { bgm: false, sfx: false }, learning: { missionCheckpoints: { bad: { phase: 'operate' } } }
+  });
+  report.corruptSave = await evaluate(`({
+    active: window.__game.session.mapActive,
+    regions: window.__game.state.player.unlockedRegions,
+    collected: window.__game.state.map.collectedItems,
+    checkpoints: window.__game.state.learning.missionCheckpoints
+  })`);
+  assert.deepEqual(report.corruptSave, {
+    active: true, regions: [0], collected: [], checkpoints: {}
+  });
+
+  await fresh({
+    version: 3,
+    player: { unlockedRegions: [0,1], completedLevels: ['0-0','0-1','0-2','0-3'], currentRegion: 1 },
+    map: {}, achievements: {}, settings: { bgm: false, sfx: false }
+  });
+  report.legacy = await evaluate('window.__game.state.map.worldChanges');
+  assert.deepEqual(report.legacy, { windmillRestored: true, bridgeOpened: true, stormCalmed: false });
+
+  stage('移动端地图与任务台边界');
+  await send('Emulation.setDeviceMetricsOverride', {
+    width: 390, height: 844, deviceScaleFactor: 1, mobile: true
+  });
+  await fresh();
+  report.mobileMap = await evaluate(`(() => {
+    const dpad = document.querySelector('.touch-dpad').getBoundingClientRect();
+    const header = document.querySelector('.map-header').getBoundingClientRect();
+    return {
+      viewport: [innerWidth, innerHeight],
+      dpadInside: dpad.left >= 0 && dpad.right <= innerWidth && dpad.bottom <= innerHeight,
+      headerInside: header.left >= 0 && header.right <= innerWidth,
+      horizontalOverflow: document.documentElement.scrollWidth > innerWidth
+    };
+  })()`);
+  assert.deepEqual(report.mobileMap, {
+    viewport: [390, 844], dpadInside: true, headerInside: true, horizontalOverflow: false
+  });
+  await capture('06-mobile-map');
+  await enterWindRegion();
+  await evaluate('document.querySelectorAll(".level-item")[0].click()');
+  await choosePrediction();
+  report.mobilePuzzle = await evaluate(`(() => {
+    const card = document.querySelector('.puzzle-card');
+    const rect = card.getBoundingClientRect();
+    return {
+      cardInside: rect.left >= 0 && rect.right <= innerWidth,
+      horizontalOverflow: card.scrollWidth > card.clientWidth + 1,
+      tokenSize: Math.round(document.querySelector('.puzzle-token:not(.used)').getBoundingClientRect().width)
+    };
+  })()`);
+  assert.deepEqual({ cardInside: report.mobilePuzzle.cardInside, horizontalOverflow: report.mobilePuzzle.horizontalOverflow },
+    { cardInside: true, horizontalOverflow: false });
+  assert.ok(report.mobilePuzzle.tokenSize >= 56);
+  await capture('07-mobile-puzzle');
+  await send('Emulation.clearDeviceMetricsOverride');
+
+  report.runtimeExceptions = runtimeExceptions;
+  assert.deepEqual(runtimeExceptions, [], `浏览器运行时异常：${runtimeExceptions.join('; ')}`);
+  console.log(JSON.stringify(report, null, 2));
+} finally {
+  socket.close();
+}

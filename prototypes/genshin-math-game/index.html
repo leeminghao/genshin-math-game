@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数境远征：艾瑟里亚数理冒险</title>
+  <link rel="stylesheet" href="css/style.css?v=4.7">
+</head>
+<body>
+  <div id="app">
+    <!-- 加载界面 -->
+    <section id="loading-screen" class="screen active">
+      <div class="loading-content">
+        <div class="element-wheel">
+          <div class="element-icon anemo">🌪️</div>
+          <div class="element-icon geo">⛰️</div>
+          <div class="element-icon electro">⚡</div>
+          <div class="element-icon dendro">🌿</div>
+          <div class="element-icon hydro">💧</div>
+          <div class="element-icon pyro">🔥</div>
+          <div class="element-icon cryo">❄️</div>
+        </div>
+        <div class="loading-text">正在进入艾瑟里亚数理世界…</div>
+        <div class="loading-bar"><div class="loading-progress"></div></div>
+      </div>
+    </section>
+
+    <!-- 主菜单 -->
+    <section id="main-menu" class="screen">
+      <div class="menu-bg">
+        <div class="menu-stars"></div>
+        <div class="menu-clouds"></div>
+      </div>
+      <div class="menu-character-stage" aria-hidden="true">
+        <div class="menu-hero-portrait"></div>
+        <div class="menu-guide-portrait"></div>
+      </div>
+      <div class="menu-content">
+        <div class="game-logo">
+          <div class="logo-age-pill">适合 7—11 岁儿童</div>
+          <div class="logo-subtitle">先猜一猜 · 再动手 · 最后讲清楚</div>
+          <h1 class="logo-title">数境远征</h1>
+          <div class="logo-tagline">艾瑟里亚数理冒险</div>
+          <p class="logo-promise">让数字变成看得见、拿得动、可以亲手修复世界的力量。</p>
+        </div>
+        <div class="menu-buttons">
+          <button class="genshin-btn primary" id="btn-start"><strong>开始新冒险</strong><small>第一次来到艾瑟里亚</small></button>
+          <button class="genshin-btn" id="btn-continue"><strong>继续冒险</strong><small>从上次保存处出发</small></button>
+          <button class="genshin-btn" id="btn-achievements">成就</button>
+          <button class="genshin-btn" id="btn-quests">任务</button>
+          <button class="genshin-btn" id="btn-settings">设置</button>
+        </div>
+        <div class="menu-guide-line"><span class="guide-dot"></span>星芽会陪你观察，答错也可以随时重来。</div>
+      </div>
+      <div class="version">2D 开放世界 · 数境大陆 v4.7</div>
+    </section>
+
+    <!-- 三题能力诊断 -->
+    <section id="diagnostic-screen" class="screen">
+      <div class="diagnostic-bg"></div>
+      <div class="diagnostic-card">
+        <div class="diagnostic-kicker">旅行前的小观察</div>
+        <h2>找到适合你的起点</h2>
+        <p class="diagnostic-desc">这不是考试，只用三道题判断哪些内容值得先探索。答错不会扣除任何奖励。</p>
+        <div class="diagnostic-progress" id="diagnostic-progress">第 1 / 3 题</div>
+        <div class="diagnostic-question" id="diagnostic-question"></div>
+        <div class="diagnostic-options" id="diagnostic-options"></div>
+        <div class="diagnostic-result hidden" id="diagnostic-result">
+          <div class="diagnostic-result-icon">🧭</div>
+          <h3 id="diagnostic-result-title"></h3>
+          <p id="diagnostic-result-text"></p>
+          <div class="diagnostic-actions">
+            <button class="genshin-btn primary" id="btn-diagnostic-suggested">按建议出发</button>
+            <button class="genshin-btn" id="btn-diagnostic-wind">从风语原体验</button>
+          </div>
+        </div>
+        <button class="text-btn" id="btn-diagnostic-skip">暂时跳过，从风语原开始</button>
+      </div>
+    </section>
+
+    <!-- 开放世界地图 -->
+    <section id="world-map" class="screen" tabindex="-1">
+      <div class="open-world" id="open-world">
+        <div class="world-canvas" id="world-canvas">
+  <!-- 迷雾 -->
+  <div class="fog-of-war"></div>
+  <div class="landmark" id="landmark-0" data-region="0" style="left: 1400px; top: 2600px;">
+    <div class="landmark-icon">🌪️</div>
+    <div class="landmark-name">风语原</div>
+    <div class="landmark-theme">数与运算</div>
+    <div class="landmark-lock">🔒</div>
+    <div class="landmark-pulse"></div>
+  </div>
+  <div class="landmark" id="landmark-1" data-region="1" style="left: 4200px; top: 1100px;">
+    <div class="landmark-icon">⛰️</div>
+    <div class="landmark-name">岩岚港</div>
+    <div class="landmark-theme">图形与几何</div>
+    <div class="landmark-lock">🔒</div>
+    <div class="landmark-pulse"></div>
+  </div>
+  <div class="landmark" id="landmark-2" data-region="2" style="left: 6900px; top: 1500px;">
+    <div class="landmark-icon">⚡</div>
+    <div class="landmark-name">雷鸣群岛</div>
+    <div class="landmark-theme">测量与单位</div>
+    <div class="landmark-lock">🔒</div>
+    <div class="landmark-pulse"></div>
+  </div>
+  <div class="landmark" id="landmark-3" data-region="3" style="left: 2900px; top: 3900px;">
+    <div class="landmark-icon">🌿</div>
+    <div class="landmark-name">森语城</div>
+    <div class="landmark-theme">数据与概率</div>
+    <div class="landmark-lock">🔒</div>
+    <div class="landmark-pulse"></div>
+  </div>
+  <div class="landmark" id="landmark-4" data-region="4" style="left: 5100px; top: 2900px;">
+    <div class="landmark-icon">💧</div>
+    <div class="landmark-name">澄水庭</div>
+    <div class="landmark-theme">代数思维</div>
+    <div class="landmark-lock">🔒</div>
+    <div class="landmark-pulse"></div>
+  </div>
+  <div class="landmark" id="landmark-5" data-region="5" style="left: 4300px; top: 4300px;">
+    <div class="landmark-icon">🔥</div>
+    <div class="landmark-name">赤焰谷</div>
+    <div class="landmark-theme">比与比例</div>
+    <div class="landmark-lock">🔒</div>
+    <div class="landmark-pulse"></div>
+  </div>
+  <div class="landmark" id="landmark-6" data-region="6" style="left: 6600px; top: 4300px;">
+    <div class="landmark-icon">❄️</div>
+    <div class="landmark-name">雪境宫</div>
+    <div class="landmark-theme">综合试炼</div>
+    <div class="landmark-lock">🔒</div>
+    <div class="landmark-pulse"></div>
+  </div>
+  <div class="region-label" style="left: 1300px; top: 2520px;">🌪️ 风语原</div>
+  <div class="region-label" style="left: 4100px; top: 1020px;">⛰️ 岩岚港</div>
+  <div class="region-label" style="left: 6800px; top: 1420px;">⚡ 雷鸣群岛</div>
+  <div class="region-label" style="left: 2800px; top: 3820px;">🌿 森语城</div>
+  <div class="region-label" style="left: 5000px; top: 2820px;">💧 澄水庭</div>
+  <div class="region-label" style="left: 4200px; top: 4220px;">🔥 赤焰谷</div>
+  <div class="region-label" style="left: 6500px; top: 4220px;">❄️ 雪境宫</div>
+  <div class="region-gate" style="left: 1800px; top: 2800px;">
+    <div class="gate-icon">🚪</div>
+    <div class="gate-label">风语原之门</div>
+  </div>
+  <div class="region-gate" style="left: 4600px; top: 1300px;">
+    <div class="gate-icon">🚪</div>
+    <div class="gate-label">岩岚之门</div>
+  </div>
+  <div class="region-gate" style="left: 6500px; top: 1700px;">
+    <div class="gate-icon">🚪</div>
+    <div class="gate-label">雷鸣之门</div>
+  </div>
+  <div class="region-gate" style="left: 3300px; top: 3700px;">
+    <div class="gate-icon">🚪</div>
+    <div class="gate-label">森语之门</div>
+  </div>
+  <div class="region-gate" style="left: 4700px; top: 2700px;">
+    <div class="gate-icon">🚪</div>
+    <div class="gate-label">澄水之门</div>
+  </div>
+  <div class="region-gate" style="left: 4600px; top: 4100px;">
+    <div class="gate-icon">🚪</div>
+    <div class="gate-label">赤焰之门</div>
+  </div>
+  <div class="region-gate" style="left: 6300px; top: 4100px;">
+    <div class="gate-icon">🚪</div>
+    <div class="gate-label">雪境之门</div>
+  </div>
+  <div class="village" style="left: 1200px; top: 2400px;">
+    <div class="village-icon">🏘️</div>
+    <div class="village-label">风车村</div>
+  </div>
+  <div class="village" style="left: 2600px; top: 3000px;">
+    <div class="village-icon">🏘️</div>
+    <div class="village-label">石语村</div>
+  </div>
+  <div class="village" style="left: 3400px; top: 2900px;">
+    <div class="village-icon">🏘️</div>
+    <div class="village-label">湖畔村</div>
+  </div>
+  <div class="village" style="left: 2700px; top: 2900px;">
+    <div class="village-icon">🏘️</div>
+    <div class="village-label">林边村</div>
+  </div>
+  <div class="village" style="left: 5400px; top: 1600px;">
+    <div class="village-icon">🏘️</div>
+    <div class="village-label">雷音村</div>
+  </div>
+  <div class="village" style="left: 6100px; top: 2700px;">
+    <div class="village-icon">🏘️</div>
+    <div class="village-label">水月村</div>
+  </div>
+  <div class="village" style="left: 5300px; top: 3700px;">
+    <div class="village-icon">🏘️</div>
+    <div class="village-label">火石村</div>
+  </div>
+  <div class="village" style="left: 5600px; top: 4100px;">
+    <div class="village-icon">🏘️</div>
+    <div class="village-label">雪见村</div>
+  </div>
+  <div class="village" style="left: 4400px; top: 3700px;">
+    <div class="village-icon">🏘️</div>
+    <div class="village-label">星落村</div>
+  </div>
+  <div class="village" style="left: 3600px; top: 1300px;">
+    <div class="village-icon">🏘️</div>
+    <div class="village-label">云雾村</div>
+  </div>
+  <div class="village" style="left: 4900px; top: 4400px;">
+    <div class="village-icon">🏘️</div>
+    <div class="village-label">荒野村</div>
+  </div>
+  <div class="village" style="left: 4900px; top: 3600px;">
+    <div class="village-icon">🏘️</div>
+    <div class="village-label">绿洲村</div>
+  </div>
+  <div class="waypoint" id="waypoint-0" data-waypoint="0" style="left: 1400px; top: 2600px;">
+    <div class="waypoint-icon">💠</div>
+    <div class="waypoint-label">风起地</div>
+  </div>
+  <div class="waypoint" id="waypoint-1" data-waypoint="1" style="left: 3200px; top: 1700px;">
+    <div class="waypoint-icon">💠</div>
+    <div class="waypoint-label">北岭山口</div>
+  </div>
+  <div class="waypoint" id="waypoint-2" data-waypoint="2" style="left: 3900px; top: 2700px;">
+    <div class="waypoint-icon">💠</div>
+    <div class="waypoint-label">河畔渡口</div>
+  </div>
+  <div class="waypoint" id="waypoint-3" data-waypoint="3" style="left: 2100px; top: 3200px;">
+    <div class="waypoint-icon">💠</div>
+    <div class="waypoint-label">林间小径</div>
+  </div>
+  <div class="waypoint" id="waypoint-4" data-waypoint="4" style="left: 6000px; top: 2400px;">
+    <div class="waypoint-icon">💠</div>
+    <div class="waypoint-label">湖心长廊</div>
+  </div>
+  <div class="waypoint" id="waypoint-5" data-waypoint="5" style="left: 4700px; top: 3600px;">
+    <div class="waypoint-icon">💠</div>
+    <div class="waypoint-label">峡谷口</div>
+  </div>
+  <div class="waypoint" id="waypoint-6" data-waypoint="6" style="left: 5400px; top: 4400px;">
+    <div class="waypoint-icon">💠</div>
+    <div class="waypoint-label">雪原入口</div>
+  </div>
+  <div class="waypoint" id="waypoint-7" data-waypoint="7" style="left: 6500px; top: 1900px;">
+    <div class="waypoint-icon">💠</div>
+    <div class="waypoint-label">群岛栈道</div>
+  </div>
+  <div class="collectible" data-gem="5" style="left: 4452px; top: 2126px;">💎</div>
+  <div class="collectible" data-gem="10" style="left: 5457px; top: 1445px;">💎</div>
+  <div class="collectible" data-gem="5" style="left: 3000px; top: 2900px;">💎</div>
+  <div class="collectible" data-gem="10" style="left: 6088px; top: 1900px;">💎</div>
+  <div class="collectible" data-gem="15" style="left: 6196px; top: 3978px;">💎</div>
+  <div class="collectible" data-gem="15" style="left: 4546px; top: 2332px;">💎</div>
+  <div class="collectible" data-gem="5" style="left: 3721px; top: 4366px;">💎</div>
+  <div class="collectible" data-gem="5" style="left: 5518px; top: 2679px;">💎</div>
+  <div class="collectible" data-gem="10" style="left: 3248px; top: 3967px;">💎</div>
+  <div class="collectible" data-gem="15" style="left: 2842px; top: 3133px;">💎</div>
+  <div class="collectible" data-gem="5" style="left: 4850px; top: 2118px;">💎</div>
+  <div class="collectible" data-gem="10" style="left: 6168px; top: 3862px;">💎</div>
+  <div class="collectible" data-gem="5" style="left: 3911px; top: 1670px;">💎</div>
+  <div class="collectible" data-gem="10" style="left: 5603px; top: 2126px;">💎</div>
+  <div class="collectible" data-gem="10" style="left: 5323px; top: 2897px;">💎</div>
+  <div class="collectible" data-gem="15" style="left: 5626px; top: 3164px;">💎</div>
+  <div class="collectible" data-gem="10" style="left: 5460px; top: 1307px;">💎</div>
+  <div class="collectible" data-gem="15" style="left: 5988px; top: 3797px;">💎</div>
+  <div class="collectible" data-gem="5" style="left: 3090px; top: 1318px;">💎</div>
+  <div class="collectible" data-gem="5" style="left: 5538px; top: 3278px;">💎</div>
+  <div class="chest" data-reward="gems" style="left: 3983px; top: 2937px;">
+    <div class="chest-icon">🎁</div>
+    <div class="chest-glow"></div>
+  </div>
+  <div class="chest" data-reward="gems" style="left: 1450px; top: 3543px;">
+    <div class="chest-icon">🎁</div>
+    <div class="chest-glow"></div>
+  </div>
+  <div class="chest" data-reward="gems" style="left: 3873px; top: 4219px;">
+    <div class="chest-icon">🎁</div>
+    <div class="chest-glow"></div>
+  </div>
+  <div class="chest" data-reward="gems" style="left: 4084px; top: 2541px;">
+    <div class="chest-icon">🎁</div>
+    <div class="chest-glow"></div>
+  </div>
+  <div class="chest" data-reward="gems" style="left: 1970px; top: 3381px;">
+    <div class="chest-icon">🎁</div>
+    <div class="chest-glow"></div>
+  </div>
+  <div class="chest" data-reward="gems" style="left: 4770px; top: 3493px;">
+    <div class="chest-icon">🎁</div>
+    <div class="chest-glow"></div>
+  </div>
+  <div class="chest" data-reward="gems" style="left: 1651px; top: 3175px;">
+    <div class="chest-icon">🎁</div>
+    <div class="chest-glow"></div>
+  </div>
+  <div class="chest" data-reward="gems" style="left: 4812px; top: 3072px;">
+    <div class="chest-icon">🎁</div>
+    <div class="chest-glow"></div>
+  </div>
+  <div class="npc" data-npc="0" style="left: 4600px; top: 3300px;">
+    <div class="npc-icon">🧚</div>
+    <div class="npc-name">星芽</div>
+    <div class="npc-talk">💬</div>
+  </div>
+  <div class="npc" data-npc="1" style="left: 1500px; top: 2700px;">
+    <div class="npc-icon">🌪️</div>
+    <div class="npc-name">风精灵</div>
+    <div class="npc-talk">💬</div>
+  </div>
+  <div class="npc" data-npc="2" style="left: 4300px; top: 1200px;">
+    <div class="npc-icon">📜</div>
+    <div class="npc-name">岩岚学者</div>
+    <div class="npc-talk">💬</div>
+  </div>
+  <div class="npc" data-npc="3" style="left: 6800px; top: 1600px;">
+    <div class="npc-icon">🔨</div>
+    <div class="npc-name">雷岛工匠</div>
+    <div class="npc-talk">💬</div>
+  </div>
+  <div class="npc" data-npc="4" style="left: 5000px; top: 3000px;">
+    <div class="npc-icon">⚖️</div>
+    <div class="npc-name">澄水法官</div>
+    <div class="npc-talk">💬</div>
+  </div>
+  <div class="npc" data-npc="5" style="left: 4400px; top: 4400px;">
+    <div class="npc-icon">🔥</div>
+    <div class="npc-name">赤焰谷战士</div>
+    <div class="npc-talk">💬</div>
+  </div>
+  <div class="npc" data-npc="6" style="left: 6500px; top: 4400px;">
+    <div class="npc-icon">❄️</div>
+    <div class="npc-name">雪境学者</div>
+    <div class="npc-talk">💬</div>
+  </div>
+  <div class="npc" data-npc="7" style="left: 4500px; top: 3100px;">
+    <div class="npc-icon">🧙</div>
+    <div class="npc-name">游方术士</div>
+    <div class="npc-talk">💬</div>
+  </div>
+  <div class="npc" data-npc="8" style="left: 1220px; top: 2420px;">
+    <div class="npc-icon">👩‍🌾</div>
+    <div class="npc-name">村妇</div>
+    <div class="npc-talk">💬</div>
+  </div>
+  <div class="npc" data-npc="9" style="left: 2700px; top: 3020px;">
+    <div class="npc-icon">👨‍🌾</div>
+    <div class="npc-name">农夫</div>
+    <div class="npc-talk">💬</div>
+  </div>
+  <div class="npc" data-npc="10" style="left: 3000px; top: 3800px;">
+    <div class="npc-icon">🧝</div>
+    <div class="npc-name">森林守护者</div>
+    <div class="npc-talk">💬</div>
+  </div>
+  <div class="npc" data-npc="11" style="left: 3500px; top: 3000px;">
+    <div class="npc-icon">🧜</div>
+    <div class="npc-name">湖畔渔夫</div>
+    <div class="npc-talk">💬</div>
+  </div>
+  <div class="story-trigger" data-story="intro" style="left: 1325px; top: 2645px; width: 150px; height: 150px;"></div>
+  <div class="story-trigger" data-story="wind" style="left: 1450px; top: 2650px; width: 100px; height: 100px;"></div>
+  <div class="story-trigger" data-story="rock" style="left: 4250px; top: 1150px; width: 100px; height: 100px;"></div>
+  <div class="story-trigger" data-story="river" style="left: 4950px; top: 2950px; width: 100px; height: 100px;"></div>
+  <div class="story-trigger" data-story="forest" style="left: 2950px; top: 3750px; width: 100px; height: 100px;"></div>
+  <div class="story-trigger" data-story="mountain" style="left: 4550px; top: 1650px; width: 100px; height: 100px;"></div>
+  <div class="story-trigger" data-story="desert" style="left: 4750px; top: 4350px; width: 100px; height: 100px;"></div>
+  <div class="story-trigger" data-story="swamp" style="left: 6050px; top: 3650px; width: 100px; height: 100px;"></div>
+  <div class="story-trigger" data-story="village1" style="left: 1160px; top: 2360px; width: 80px; height: 80px;"></div>
+  <div class="story-trigger" data-story="village2" style="left: 3360px; top: 2860px; width: 80px; height: 80px;"></div>
+  <div class="story-trigger" data-story="village3" style="left: 5360px; top: 1560px; width: 80px; height: 80px;"></div>
+  <div class="story-trigger" data-story="village4" style="left: 5560px; top: 4060px; width: 80px; height: 80px;"></div>
+  <div class="hidden-area" style="left: 850px; top: 2150px;" data-area="forest-clearing">
+    <div class="hidden-icon">✨</div>
+  </div>
+  <div class="hidden-area" style="left: 2350px; top: 2200px;" data-area="mountain-peak">
+    <div class="hidden-icon">✨</div>
+  </div>
+  <div class="hidden-area" style="left: 950px; top: 2950px;" data-area="desert-oasis">
+    <div class="hidden-icon">✨</div>
+  </div>
+  <div class="hidden-area" style="left: 2250px; top: 2950px;" data-area="swamp-secret">
+    <div class="hidden-icon">✨</div>
+  </div>
+  <div class="hidden-area" style="left: 4400px; top: 1700px;" data-area="sky-island">
+    <div class="hidden-icon">✨</div>
+  </div>
+  <div class="hidden-area" style="left: 5400px; top: 3100px;" data-area="ocean-cave">
+    <div class="hidden-icon">✨</div>
+  </div>
+  <div class="world-change windmill" id="windmill-change" style="left: 1640px; top: 2420px;">
+    <div class="windmill-tower">🏠</div>
+    <div class="windmill-blades">✣</div>
+    <div class="world-change-label">沉睡的风车</div>
+  </div>
+  <div class="world-change wind-bridge" id="wind-bridge-change" style="left: 1720px; top: 2700px;">
+    <div class="bridge-planks">▰ ▰ ▰ ▰</div>
+    <div class="world-change-label">断裂的风桥</div>
+  </div>
+  <div class="world-change storm-core" id="storm-core-change" style="left: 1170px; top: 2710px;">
+    <div class="storm-core-ring">◉</div>
+    <div class="world-change-label">失衡的风暴核心</div>
+  </div>
+
+          <!-- 玩家角色 -->
+          <div class="player-sprite" id="player-sprite">
+            <div class="player-body">
+              <div class="player-head">🧒</div>
+              <div class="player-cape"></div>
+            </div>
+            <div class="player-shadow"></div>
+            <div class="player-direction" id="player-direction">▲</div>
+            <div class="player-trail" id="player-trail"></div>
+            <div class="player-marker">▼ 你在这里</div>
+          </div>
+        </div>
+      </div>
+
+      <header class="map-header">
+        <button class="icon-btn" id="btn-map-back">◀</button>
+        <div class="map-title">数理艾瑟里亚</div>
+        <div class="map-header-actions">
+          <button class="icon-btn" id="btn-learning-profile" title="学习档案" aria-label="学习档案">🎓</button>
+          <button class="icon-btn" id="btn-wardrobe" title="风之装扮" aria-label="风之装扮">🎨</button>
+          <button class="icon-btn" id="btn-map-quests" title="每日/每周任务" aria-label="每日/每周任务">🗓️</button>
+          <button class="icon-btn" id="btn-map-achievements" title="成就">🏆</button>
+          <button class="icon-btn" id="btn-map-settings" title="设置">⚙️</button>
+          <div class="player-mini">
+            <span class="mini-level">Lv.<b id="mini-level">1</b></span>
+            <span class="mini-gems">💎 <b id="mini-gems">0</b></span>
+          </div>
+        </div>
+      </header>
+      <!-- 罗盘条（原神式顶部方位条，marker 由 game.js 每帧定位） -->
+      <div class="compass-bar" id="compass-bar">
+        <div class="compass-marker compass-n" id="compass-n">北</div>
+        <div class="compass-marker compass-objective" id="compass-objective">🌪️</div>
+      </div>
+
+      <!-- 冲刺体力条 -->
+      <div class="stamina-bar hidden" id="stamina-bar"><div class="stamina-fill" id="stamina-fill"></div></div>
+
+      <!-- 区域发现横幅 -->
+      <div class="region-banner" id="region-banner">
+        <div class="region-banner-name" id="region-banner-name"></div>
+        <div class="region-banner-theme" id="region-banner-theme"></div>
+      </div>
+
+
+      <div class="map-controls">
+        <div class="control-hint"><strong>探索方式</strong><span>WASD / 方向键，或点击地图</span></div>
+        <div class="touch-dpad" aria-label="地图移动控制">
+          <button data-map-move="arrowup" aria-label="向上移动">▲</button>
+          <button data-map-move="arrowleft" aria-label="向左移动">◀</button>
+          <button data-map-move="arrowdown" aria-label="向下移动">▼</button>
+          <button data-map-move="arrowright" aria-label="向右移动">▶</button>
+        </div>
+      </div>
+
+      <!-- 任务日志 -->
+      <div class="quest-log" id="quest-log">
+        <div class="quest-header">
+          <span class="quest-icon">📜</span>
+          <span class="quest-title">数理冒险</span>
+        </div>
+        <div class="quest-body" id="quest-body">
+          <div class="quest-item current" id="quest-current">前往风语原，开始冒险</div>
+          <div class="quest-progress" id="quest-progress">0/4</div>
+        </div>
+      </div>
+
+      <!-- 小地图 -->
+      <div class="minimap-container">
+        <canvas id="minimap" width="280" height="175"></canvas>
+        <div class="minimap-label">地图</div>
+      </div>
+
+      <!-- 传送点提示 -->
+      <div class="waypoint-prompt hidden" id="waypoint-prompt">
+        <div class="prompt-text">激活传送点</div>
+        <button class="genshin-btn primary" id="btn-activate-waypoint">激活</button>
+      </div>
+
+      <!-- 传送菜单 -->
+      <div class="teleport-menu hidden" id="teleport-menu">
+        <div class="teleport-title">选择目的地</div>
+        <div class="teleport-list" id="teleport-list"></div>
+        <button class="genshin-btn" id="btn-close-teleport">取消</button>
+      </div>
+
+      <div class="region-enter-prompt hidden" id="region-enter-prompt">
+        <div class="prompt-text" id="prompt-text">进入 风语原</div>
+        <button class="genshin-btn primary" id="btn-enter-region">进入</button>
+      </div>
+
+      <div class="region-hint" id="region-hint" aria-live="polite">沿着亮色道路前进，靠近地标后选择“进入”</div>
+
+      <!-- 新手教程浮卡（非阻塞） -->
+      <div class="tutorial-card hidden" id="tutorial-card">
+        <div class="tutorial-header">
+          <span class="tutorial-icon">🎮</span>
+          <span class="tutorial-title">操作指南</span>
+          <button class="tutorial-close" id="btn-close-tutorial">×</button>
+        </div>
+        <div class="tutorial-body">
+          <div class="tutorial-item">⌨️ WASD / 方向键 移动</div>
+          <div class="tutorial-item">🖱️ 点击地图 自动寻路</div>
+          <div class="tutorial-item">🏛️ 靠近地标 点击“进入”挑战</div>
+          <div class="tutorial-item">✨ 靠近发光区域 触发剧情</div>
+          <div class="tutorial-item">💎 收集水晶 获得奖励</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 身体化数学操作 -->
+    <section id="puzzle-screen" class="screen">
+      <div class="puzzle-bg"></div>
+      <div class="puzzle-card" aria-labelledby="puzzle-title">
+        <div class="puzzle-guide-panel" id="puzzle-guide-panel" data-mood="curious">
+          <div class="puzzle-guide-avatar" aria-hidden="true"></div>
+          <div class="puzzle-guide-copy">
+            <strong id="puzzle-guide-mood">星芽陪你观察</strong>
+            <p id="puzzle-guide-text" aria-live="polite">先说出你的第一种想法。猜错不会扣掉任何东西。</p>
+          </div>
+        </div>
+        <div class="puzzle-stepper" id="puzzle-stepper">
+          <span class="active">1 预测</span><span>2 操作</span><span>3 表达</span><span>4 检验</span><span>5 迁移</span>
+        </div>
+        <div class="puzzle-phase-label" id="puzzle-phase-label">先允许自己猜一猜</div>
+        <h2 id="puzzle-title">修复风车</h2>
+        <p id="puzzle-story"></p>
+        <div class="mission-hints hidden" id="mission-hints">
+          <span>我想要一点帮助：</span>
+          <button data-mission-hint-tier="1">① 找关键对象</button>
+          <button data-mission-hint-tier="2">② 看一步动作</button>
+          <button data-mission-hint-tier="3">③ 核对数学条件</button>
+        </div>
+        <div class="puzzle-prediction" id="puzzle-prediction">
+          <h3 id="puzzle-prediction-text"></h3>
+          <div class="puzzle-prediction-options" id="puzzle-prediction-options"></div>
+        </div>
+        <div class="puzzle-workspace hidden" id="puzzle-workspace">
+          <div class="puzzle-pool" id="puzzle-pool"></div>
+          <div class="puzzle-zones" id="puzzle-zones"></div>
+          <p class="puzzle-status" id="puzzle-status" aria-live="polite"></p>
+          <button class="genshin-btn primary hidden" id="btn-puzzle-check">检验我的操作</button>
+        </div>
+        <div class="puzzle-expression hidden" id="puzzle-expression">
+          <h3 id="puzzle-expression-text">用一句话描述刚才的操作</h3>
+          <div class="puzzle-expression-options" id="puzzle-expression-options"></div>
+          <div class="puzzle-error-card hidden" id="puzzle-error-card" role="status">
+            <strong id="puzzle-error-type">再观察一次</strong>
+            <span id="puzzle-error-text"></span>
+          </div>
+        </div>
+        <div class="puzzle-formal hidden" id="puzzle-formal">
+          <div class="puzzle-success">风场稳定！</div>
+          <div class="prediction-compare" id="puzzle-prediction-compare"></div>
+          <p id="puzzle-formal-text"></p>
+          <p class="puzzle-completion-note hidden" id="puzzle-completion-note"></p>
+          <button class="genshin-btn primary" id="btn-puzzle-continue">进入迁移任务</button>
+        </div>
+        <button class="text-btn challenge-exit" id="btn-puzzle-exit">保存进度并返回关卡选择</button>
+      </div>
+    </section>
+
+    <!-- 区域详情 -->
+    <section id="region-detail" class="screen">
+      <div class="region-detail-bg"></div>
+      <header class="detail-header">
+        <button class="icon-btn" id="btn-detail-back" title="返回地图" aria-label="返回地图">◀</button>
+        <div class="detail-title" id="detail-title">风语原</div>
+        <div class="detail-theme" id="detail-theme">数与运算</div>
+      </header>
+      <div class="detail-body">
+        <div class="region-story" id="region-story">
+          <p>在这里，数字不再是枯燥的符号。风会带来“一一对应”的轻语，教你把数和物一一配对。</p>
+        </div>
+        <div class="levels-list" id="levels-list"></div>
+      </div>
+    </section>
+
+    <!-- 剧情对话 -->
+    <section id="dialog-screen" class="screen">
+      <div class="dialog-bg" id="dialog-bg"></div>
+      <div class="dialog-character" id="dialog-character"></div>
+      <div class="dialog-box">
+        <div class="dialog-speaker" id="dialog-speaker">星芽</div>
+        <div class="dialog-text" id="dialog-text"></div>
+        <div class="dialog-choices" id="dialog-choices"></div>
+        <div class="dialog-tip" id="dialog-tip">点击屏幕继续</div>
+      </div>
+    </section>
+
+    <!-- 战斗/解题界面 -->
+    <section id="battle-screen" class="screen">
+      <div class="battle-bg" id="battle-bg"></div>
+      <div class="battle-top">
+        <div class="enemy-info">
+          <div class="enemy-name" id="enemy-name">迷雾术士</div>
+          <div class="enemy-hp-bar"><div class="enemy-hp-fill" id="enemy-hp-fill"></div></div>
+          <div class="enemy-hp-text" id="enemy-hp-text">100/100</div>
+        </div>
+        <div class="battle-timer" id="battle-timer">∞</div>
+      </div>
+      <button class="battle-exit-btn" id="btn-battle-exit" aria-label="退出当前挑战">退出挑战</button>
+      <button class="skill-tree-btn" id="btn-skill-tree" aria-label="打开技能树">🌟 技能树 <span id="skill-points-badge">0/6</span></button>
+      <div class="enemy-stage">
+        <div class="enemy-sprite" id="enemy-sprite">👾</div>
+        <div class="enemy-element" id="enemy-element"></div>
+        <div class="damage-number" id="damage-number"></div>
+      </div>
+      <div class="battle-bottom">
+        <div class="player-hud">
+          <div class="hud-avatar">🧒</div>
+          <div class="hud-bars">
+            <div class="hp-bar"><div class="hp-fill" id="player-hp-fill"></div></div>
+            <div class="bar-label"><span id="player-hp-text">100/100</span><span id="player-energy-text">0/100</span></div>
+            <div class="energy-bar"><div class="energy-fill" id="player-energy-fill"></div></div>
+          </div>
+        </div>
+        <div class="question-panel">
+          <div class="battle-stage-progress" id="battle-stage-progress"></div>
+          <div class="question-tag" id="question-tag">一一对应</div>
+          <div class="question-text" id="question-text"></div>
+          <div class="question-visual" id="question-visual"></div>
+        </div>
+        <div class="answer-area" id="answer-area"></div>
+        <div class="tiered-hints" id="tiered-hints">
+          <span>需要帮助：</span>
+          <button data-hint-tier="1">看一看</button>
+          <button data-hint-tier="2">试一试</button>
+          <button data-hint-tier="3">形式检验</button>
+        </div>
+        <div class="skill-bar">
+          <button class="skill-btn" id="skill-0" title="一一对应" aria-label="提示：一一对应">🌪️</button>
+          <button class="skill-btn" id="skill-1" title="位值制" aria-label="提示：位值制">⛰️</button>
+          <button class="skill-btn" id="skill-2" title="平均分" aria-label="提示：平均分">⚡</button>
+          <button class="skill-btn" id="skill-3" title="割补转化" aria-label="提示：割补转化">🌿</button>
+          <button class="skill-btn" id="skill-4" title="等量关系" aria-label="提示：等量关系">💧</button>
+          <button class="skill-btn" id="skill-5" title="找单位1" aria-label="提示：找单位1">🔥</button>
+          <button class="skill-btn" id="skill-6" title="变量关系" aria-label="提示：变量关系">❄️</button>
+          <button class="skill-btn burst-btn disabled" id="burst-btn" title="灵感共鸣" aria-label="灵感共鸣">✨</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 奖励界面 -->
+    <section id="reward-screen" class="screen">
+      <div class="reward-bg"></div>
+      <div class="reward-card">
+        <div class="reward-world-change" id="reward-world-change" data-change="journey" aria-live="polite">
+          <div class="reward-map-preview" aria-hidden="true"></div>
+          <div class="reward-restoration-wave" aria-hidden="true"></div>
+          <div class="reward-change-icon" id="reward-change-icon" aria-hidden="true">✦</div>
+          <div class="reward-change-title" id="reward-change-title">世界记住了你的操作</div>
+        </div>
+        <div class="reward-title" id="reward-title">修复完成</div>
+        <div class="reward-stars" id="reward-stars" aria-label="本次成长记录">⭐⭐⭐</div>
+        <div class="reward-growth-badges" id="reward-growth-badges"></div>
+        <div class="reward-items" id="reward-items"></div>
+        <div class="reward-msg" id="reward-msg"></div>
+        <div class="reflection-panel" id="reflection-panel">
+          <div class="reflection-title">用一句话收尾：这次你看见了什么？</div>
+          <div class="reflection-options" id="reflection-options"></div>
+        </div>
+        <div class="reward-actions">
+          <button class="genshin-btn primary" id="btn-reward-continue">继续闯关</button>
+          <button class="genshin-btn" id="btn-reward-map">返回地图探索</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 学习档案 -->
+    <section id="learning-profile-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="learning-profile-title">
+      <div class="modal-overlay" id="learning-profile-overlay"></div>
+      <div class="modal-content learning-profile-content">
+        <h3 id="learning-profile-title">🎓 学习档案</h3>
+        <div id="learning-profile-summary"></div>
+        <div class="mastery-list" id="mastery-list"></div>
+        <div class="misconception-list" id="misconception-list"></div>
+        <button class="genshin-btn" id="btn-close-learning-profile">关闭</button>
+      </div>
+    </section>
+
+    <!-- 非数值装扮 -->
+    <section id="wardrobe-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wardrobe-title">
+      <div class="modal-overlay" id="wardrobe-overlay"></div>
+      <div class="modal-content wardrobe-content">
+        <h3 id="wardrobe-title">🎨 风之装扮</h3>
+        <p>星砂只解锁外观，不影响答题难度或角色强度。</p>
+        <div class="wardrobe-list" id="wardrobe-list"></div>
+        <button class="genshin-btn" id="btn-close-wardrobe">关闭</button>
+      </div>
+    </section>
+
+    <!-- 技能树 -->
+    <section id="skill-tree-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="skill-tree-title">
+      <div class="modal-overlay" id="skill-tree-overlay"></div>
+      <div class="modal-content skill-tree-content">
+        <h3 id="skill-tree-title">🌟 技能树</h3>
+        <p class="skill-tree-balance">可用星砂：<span id="skill-tree-gems">0</span> 💎 · 已激活 <span id="skill-tree-count">0</span> 个被动技能</p>
+        <div class="skill-tree-list" id="skill-tree-list"></div>
+        <button class="genshin-btn" id="btn-close-skill-tree">关闭</button>
+      </div>
+    </section>
+
+    <!-- 设置弹窗 -->
+    <section id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="modal-overlay" id="settings-overlay"></div>
+      <div class="modal-content">
+        <h3 id="settings-title">设置</h3>
+        <div class="setting-row">
+          <span>背景音乐</span>
+          <button class="toggle" id="toggle-bgm">OFF</button>
+        </div>
+        <div class="setting-row">
+          <span>音效</span>
+          <button class="toggle" id="toggle-sfx">ON</button>
+        </div>
+        <div class="setting-row">
+          <span>大字模式</span>
+          <button class="toggle" id="toggle-large-text" aria-pressed="false">OFF</button>
+        </div>
+        <div class="setting-row">
+          <span>舒缓动画</span>
+          <button class="toggle" id="toggle-reduced-motion" aria-pressed="false">OFF</button>
+        </div>
+        <div class="setting-row">
+          <span>重置进度</span>
+          <button class="genshin-btn small danger" id="btn-reset">重置</button>
+        </div>
+        <button class="genshin-btn" id="btn-close-settings">关闭</button>
+      </div>
+    </section>
+
+    <!-- 成就弹窗 -->
+    <section id="achievements-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="achievements-title">
+      <div class="modal-overlay" id="achievements-overlay"></div>
+      <div class="modal-content achievements-content">
+        <h3 id="achievements-title">🏆 成就</h3>
+        <div class="achievements-list" id="achievements-list"></div>
+        <button class="genshin-btn" id="btn-close-achievements">关闭</button>
+      </div>
+    </section>
+
+    <!-- 每日/每周任务弹窗 -->
+    <section id="quests-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="quests-title">
+      <div class="modal-overlay" id="quests-overlay"></div>
+      <div class="modal-content quests-content">
+        <h3 id="quests-title">🗓️ 冒险任务</h3>
+        <div class="quest-section-title">每日任务 <small id="daily-quest-note"></small></div>
+        <div class="quest-task-list" id="daily-task-list"></div>
+        <div class="quest-section-title">每周任务 <small id="weekly-quest-note"></small></div>
+        <div class="quest-task-list" id="weekly-task-list"></div>
+        <button class="genshin-btn" id="btn-close-quests">关闭</button>
+      </div>
+    </section>
+
+    <!-- 提示弹窗 -->
+    <section id="hint-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="hint-title">
+      <div class="modal-overlay" id="hint-overlay"></div>
+      <div class="modal-content hint-content">
+        <h3 id="hint-title">💡 思维点拨</h3>
+        <p id="hint-text"></p>
+        <button class="genshin-btn" id="btn-close-hint">明白了</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="js/data.js?v=4.7"></script>
+  <script src="js/learning.js?v=4.7"></script>
+  <script src="js/game.js?v=4.7"></script>
+</body>
+</html>
