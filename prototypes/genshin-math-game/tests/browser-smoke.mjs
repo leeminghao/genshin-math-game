@@ -550,6 +550,91 @@ try {
   await solveBattle();
   assert.equal(await evaluate('window.__game.state.player.completedLevels.includes("1-0")'), true);
 
+  stage('商店购买武器装备并在战斗中使用武器道具');
+  await fresh();
+  await evaluate('window.__game.state.player.gems = 600');
+  await evaluate('document.querySelector("#btn-map-shop").click()');
+  await waitFor('!document.querySelector("#shop-modal").classList.contains("hidden")');
+  await evaluate(`(() => {
+    [...document.querySelectorAll('#shop-list .shop-item')]
+      .find(el => el.textContent.includes('雷鸣长枪')).querySelector('button').click();
+  })()`);
+  report.shop = await evaluate(`({
+    gems: window.__game.state.player.gems,
+    weapon: window.__game.state.equipment.weapon,
+    owned: window.__game.state.inventory.weapons
+  })`);
+  assert.equal(report.shop.gems, 440);
+  assert.equal(report.shop.weapon, 'thunder');
+  assert.ok(report.shop.owned.includes('thunder'));
+  // 切到道具页买一瓶生命药水
+  await evaluate('document.querySelector(\'[data-shop-tab="consumables"]\').click()');
+  await evaluate(`(() => {
+    [...document.querySelectorAll('#shop-list .shop-item')]
+      .find(el => el.textContent.includes('生命药水')).querySelector('button').click();
+  })()`);
+  assert.equal(await evaluate('window.__game.state.inventory.consumables.potion'), 1);
+  assert.equal(await evaluate('window.__game.state.player.gems'), 420);
+  await evaluate('document.querySelector("#btn-close-shop").click()');
+  // 进入战斗：敌属性、武器信息、道具计数、武器技能、弱点题、攻防公式
+  await evaluate('window.__game.session.mapActive=false;window.__game.startLevel(1,0)');
+  await finishDialog();
+  await waitFor('document.querySelector(".screen.active")?.id === "battle-screen"');
+  report.battleItems = await evaluate(`({
+    enemyStats: document.querySelector('#enemy-stats').textContent,
+    weaponInfo: document.querySelector('#player-weapon-info').textContent,
+    strikeDisabled: document.querySelector('#weapon-strike-btn').disabled,
+    potionCount: document.querySelector('#potion-count').textContent,
+    badgeNow: !!document.querySelector('.weakness-badge'),
+    qCount: window.__game.session.currentQuestions.length,
+    hp: window.__game.state.player.hp
+  })`);
+  assert.match(report.battleItems.enemyStats, /⚔️ 16 · 🛡️ 2/);
+  assert.match(report.battleItems.weaponInfo, /雷鸣长枪/);
+  assert.equal(report.battleItems.strikeDisabled, false);
+  assert.equal(report.battleItems.potionCount, '1');
+  assert.equal(report.battleItems.badgeNow, false, '弱点徽标只出现在中间题');
+  // 使用武器技能：震慑 + 按钮禁用
+  await evaluate('document.querySelector("#weapon-strike-btn").click()');
+  report.strike = await evaluate(`({
+    used: window.__game.session.weaponStrikeUsed,
+    stunned: window.__game.session.enemyStunned,
+    disabled: document.querySelector('#weapon-strike-btn').disabled
+  })`);
+  assert.deepEqual(report.strike, { used: true, stunned: true, disabled: true });
+  // 答错：震慑抵消一次怪物反击；等重渲染后再答错，反击伤害 = 敌攻16 - 玩家防5 = 11
+  await evaluate(`(() => {
+    const q = window.__game.session.currentQuestions[window.__game.session.currentQuestionIndex];
+    [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) !== String(q.answer)).click();
+  })()`);
+  await waitFor('window.__game.session.enemyStunned === false && window.__game.session.answered === false');
+  assert.equal(await evaluate('window.__game.state.player.hp'), report.battleItems.hp, '震慑期答错不掉血');
+  await evaluate(`(() => {
+    const q = window.__game.session.currentQuestions[window.__game.session.currentQuestionIndex];
+    [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) !== String(q.answer)).click();
+  })()`);
+  await sleep(120);
+  assert.equal(await evaluate('window.__game.state.player.hp'), report.battleItems.hp - 11, '第二次答错按攻防公式扣血');
+  // 生命药水恢复 40（先压低血量，避免顶到上限导致断言失真）
+  await evaluate('window.__game.state.player.hp = 30');
+  await evaluate('document.querySelector("#use-potion-btn").click()');
+  assert.equal(await evaluate('window.__game.state.player.hp'), 70);
+  assert.equal(await evaluate('window.__game.state.inventory.consumables.potion'), 0);
+  // 答对进入中间题：出现弱点徽标（先等上一题结算重渲染）
+  await waitFor('window.__game.session.answered === false');
+  await evaluate(`(() => {
+    const q = window.__game.session.currentQuestions[window.__game.session.currentQuestionIndex];
+    [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) === String(q.answer)).click();
+  })()`);
+  await waitFor('window.__game.session.currentQuestionIndex === 1 && window.__game.session.answered === false');
+  assert.equal(await evaluate('!!document.querySelector(".weakness-badge")'), true, '中间题应显示弱点徽标');
+  // 弱点题答对：破防震慑
+  await evaluate(`(() => {
+    const q = window.__game.session.currentQuestions[window.__game.session.currentQuestionIndex];
+    [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) === String(q.answer)).click();
+  })()`);
+  await waitFor('window.__game.session.enemyStunned === true');
+
   stage('弹窗锁移动、损坏存档与旧存档迁移');
   await fresh();
   await evaluate('document.querySelector("#btn-map-settings").click()');

@@ -15,43 +15,43 @@ const REGIONS = [
     id: 0, name: '风语原', theme: '数与运算', element: 'anemo',
     emoji: '🌪️', color: '#74c2a8',
     story: '风起于青萍之末。在这里，数字不再是枯燥的符号——风精灵会教你“一一对应”，把数和物轻轻配对；风的流动会带你发现加法与减法其实是“部分-整体”的舞蹈。',
-    enemyEmoji: '👹', enemyName: '乱流团'
+    enemyEmoji: '👹', enemyName: '乱流团', enemyAttack: 12, enemyDefense: 0
   },
   {
     id: 1, name: '岩岚港', theme: '图形与几何', element: 'geo',
     emoji: '⛰️', color: '#fab632',
     story: '山契守望者守护的港城，每一块石头都藏着形状的秘密。从实物中抽象出图形，用“单位密铺”丈量土地，再用“割补转化”把不规则变成规则——几何的智慧，如岩元素般稳重。',
-    enemyEmoji: '🪨', enemyName: '岩甲巨像'
+    enemyEmoji: '🪨', enemyName: '岩甲巨像', enemyAttack: 16, enemyDefense: 2
   },
   {
     id: 2, name: '雷鸣群岛', theme: '测量与单位', element: 'electro',
     emoji: '⚡', color: '#af8ec1',
     story: '雷光劈开迷雾，精确的度量由此诞生。长度、人民币、质量、时间……单位之间十进千进，如同雷电的节拍。学会“统一标准”，才能看清万物的真实尺度。',
-    enemyEmoji: '⚡', enemyName: '雷幕术士'
+    enemyEmoji: '⚡', enemyName: '雷幕术士', enemyAttack: 20, enemyDefense: 4
   },
   {
     id: 3, name: '森语城', theme: '数据与概率', element: 'dendro',
     emoji: '🌿', color: '#a5c23b',
     story: '智慧的国度里，知识如森林般生长。分类、计数、图表、平均数，是认识世界的眼睛；而“可能性”则像抽枝发芽——有时确定，有时未知，却总可以用分数描述大小。',
-    enemyEmoji: '🌲', enemyName: '巨型蕈兽'
+    enemyEmoji: '🌲', enemyName: '巨型蕈兽', enemyAttack: 24, enemyDefense: 6
   },
   {
     id: 4, name: '澄水庭', theme: '代数思维', element: 'hydro',
     emoji: '💧', color: '#4fc3f7',
     story: '水流千变万化，却始终遵循等式的平衡。用字母表示未知数，寻找等量关系，就像解开水元素的谜题。运算律、方程、负数、分数——抽象思维的洪流在此汇聚。',
-    enemyEmoji: '🌊', enemyName: '水形幻人'
+    enemyEmoji: '🌊', enemyName: '水形幻人', enemyAttack: 28, enemyDefense: 8
   },
   {
     id: 5, name: '赤焰谷', theme: '比与比例', element: 'pyro',
     emoji: '🔥', color: '#ef7a35',
     story: '烈焰映照下，两个量之间的关系变得炽热而清晰。比、百分数、正比例与反比例——它们描述着“缩放”与“依存”，是通往函数世界的火种。',
-    enemyEmoji: '🔥', enemyName: '熔岩战兽'
+    enemyEmoji: '🔥', enemyName: '熔岩战兽', enemyAttack: 32, enemyDefense: 10
   },
   {
     id: 6, name: '雪境宫', theme: '综合试炼', element: 'cryo',
     emoji: '❄️', color: '#9fd6e3',
     story: '冰雪覆盖的终极殿堂。这里没有单一的元素，所有方法论将交织成最严酷的考验。把“具体数的操作”升华到“抽象关系的把握”，才能成为真正的数境探索者。',
-    enemyEmoji: '👿', enemyName: '寒域演算体'
+    enemyEmoji: '👿', enemyName: '寒域演算体', enemyAttack: 36, enemyDefense: 12
   }
 ];
 

@@ -42,6 +42,24 @@ window.addEventListener('unhandledrejection', function(e) {
     { id: 'rainbow', name: '虹光轨迹', emoji: '🌈 ･ﾟ', cost: 60, className: 'trail-rainbow' }
   ];
 
+  // 商店商品：武器（永久装备，提升攻击力与武器技能效果）+ 道具（战斗中的一次性消耗品）。
+  // 设计约束：武器不改变"必须答对全部题目才能获胜"的学习约束，只增强生存与表现。
+  const WEAPONS = [
+    { id: 'wooden', name: '木枝短剑', emoji: '🗡️', cost: 0, attackBonus: 5, desc: '旅行者的第一把武器' },
+    { id: 'wind', name: '风灵之剑', emoji: '⚔️', cost: 60, attackBonus: 10, desc: '轻盈如风，出手更快' },
+    { id: 'rock', name: '岩心重锤', emoji: '🔨', cost: 100, attackBonus: 15, desc: '沉稳有力，震慑强敌' },
+    { id: 'thunder', name: '雷鸣长枪', emoji: '🔱', cost: 160, attackBonus: 20, desc: '雷电附着的锋利枪尖' },
+    { id: 'forest', name: '森语法杖', emoji: '🪄', cost: 220, attackBonus: 25, desc: '凝聚森林智慧的法杖' },
+    { id: 'water', name: '澄水晶弓', emoji: '🏹', cost: 300, attackBonus: 30, desc: '澄澈水元素凝成的长弓' },
+    { id: 'flame', name: '赤焰大剑', emoji: '🗡️', cost: 400, attackBonus: 40, desc: '燃烧着赤焰的双手大剑' },
+    { id: 'snow', name: '雪境圣剑', emoji: '⚔️', cost: 520, attackBonus: 50, desc: '传说中的终极武器' }
+  ];
+  const CONSUMABLES = [
+    { id: 'potion', name: '生命药水', emoji: '🧪', cost: 20, desc: '战斗中恢复 40 点生命' },
+    { id: 'shield', name: '护盾符文', emoji: '🛡️', cost: 30, desc: '战斗中抵挡一次怪物攻击' },
+    { id: 'scroll', name: '智慧卷轴', emoji: '📜', cost: 25, desc: '战斗中免费查看当前题的完整提示' }
+  ];
+
   // 每日/每周任务题库：metric 对应 recordQuestProgress 的埋点，mode 为 'max' 时进度取历史最大值
   const QUEST_POOLS = {
     daily: [
@@ -178,6 +196,14 @@ window.addEventListener('unhandledrejection', function(e) {
     cosmetics: {
       owned: ['default'],
       selected: 'default'
+    },
+    // 背包：已购武器 id 列表与道具数量；装备：当前使用的武器
+    inventory: {
+      weapons: ['wooden'],
+      consumables: { potion: 0, shield: 0, scroll: 0 }
+    },
+    equipment: {
+      weapon: 'wooden'
     }
   };
 
@@ -212,14 +238,14 @@ window.addEventListener('unhandledrejection', function(e) {
     skillAll: { name: '融会贯通', desc: '解锁全部被动技能', icon: '🎓', reward: 60 }
   };
 
-  // 技能树：用星砂解锁的被动技能
+  // 技能树：用钻石解锁的被动技能
   const SKILL_TREE = [
     { id: 'energyStart', name: '元素充盈', icon: '⚡', cost: 80, desc: '每场战斗开始时能量 +30' },
     { id: 'hpBoost', name: '生命祝福', icon: '❤️', cost: 80, desc: '战斗中生命上限 +25' },
     { id: 'energyGain', name: '能量涌动', icon: '🌊', cost: 100, desc: '答对题目获得的能量提升 50%' },
     { id: 'streakGuard', name: '连击守护', icon: '🛡️', cost: 120, desc: '每关一次，答错不清零连击数' },
     { id: 'revive', name: '复苏之风', icon: '🍃', cost: 150, desc: '每场战斗一次，生命归零时恢复 35 点继续战斗' },
-    { id: 'gemFind', name: '拾荒直觉', icon: '💎', cost: 120, desc: '首次通关额外获得 15 星砂' }
+    { id: 'gemFind', name: '拾荒直觉', icon: '💎', cost: 120, desc: '首次通关额外获得 15 钻石' }
   ];
 
   // 使用非本关元素技能的能量消耗
@@ -315,7 +341,11 @@ window.addEventListener('unhandledrejection', function(e) {
     buffShield: false,
     buffDoubleEnergy: 0,
     streakGuardUsed: false,
-    reviveUsed: false
+    reviveUsed: false,
+    // 武器/道具战斗内状态
+    weaponStrikeUsed: false,   // 武器技能每场战斗一次
+    itemShield: false,         // 护盾符文：抵挡一次怪物攻击
+    enemyStunned: false        // 弱点破防/武器震慑：怪物下一次攻击无效
   };
 
   function readEventLog() {
@@ -561,6 +591,22 @@ window.addEventListener('unhandledrejection', function(e) {
     if (!normalized.cosmetics.owned.includes('default')) normalized.cosmetics.owned.unshift('default');
     normalized.cosmetics.selected = normalized.cosmetics.owned.includes(rawCosmetics.selected)
       ? rawCosmetics.selected : 'default';
+
+    // 背包与装备：旧存档没有这两个字段时给默认值，损坏字段丢弃
+    const rawInventory = isPlainObject(rawState.inventory) ? rawState.inventory : {};
+    const rawEquipment = isPlainObject(rawState.equipment) ? rawState.equipment : {};
+    const validWeaponIds = new Set(WEAPONS.map(item => item.id));
+    const validConsumableIds = new Set(CONSUMABLES.map(item => item.id));
+    normalized.inventory.weapons = uniqueValues(rawInventory.weapons, value => validWeaponIds.has(value));
+    if (!normalized.inventory.weapons.includes('wooden')) normalized.inventory.weapons.unshift('wooden');
+    const rawConsumables = isPlainObject(rawInventory.consumables) ? rawInventory.consumables : {};
+    Object.entries(rawConsumables).forEach(([id, count]) => {
+      if (validConsumableIds.has(id)) {
+        normalized.inventory.consumables[id] = Math.floor(finiteNumber(count, 0, 0, 99));
+      }
+    });
+    normalized.equipment.weapon = normalized.inventory.weapons.includes(rawEquipment.weapon)
+      ? rawEquipment.weapon : 'wooden';
     return normalized;
   }
 
@@ -649,7 +695,10 @@ window.addEventListener('unhandledrejection', function(e) {
       buffShield: false,
       buffDoubleEnergy: 0,
       streakGuardUsed: false,
-      reviveUsed: false
+      reviveUsed: false,
+      weaponStrikeUsed: false,
+      itemShield: false,
+      enemyStunned: false
     });
   }
 
@@ -662,7 +711,7 @@ window.addEventListener('unhandledrejection', function(e) {
     $$('.chest').forEach(chest => chest.classList.remove('opened'));
     $$('.hidden-area').forEach(area => area.classList.remove('discovered'));
     $$('.story-trigger').forEach(trigger => { trigger.dataset.triggered = 'false'; });
-    ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal'].forEach(id => {
+    ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal', 'shop-modal'].forEach(id => {
       $('#' + id)?.classList.add('hidden');
     });
     updateMapHud();
@@ -693,7 +742,7 @@ window.addEventListener('unhandledrejection', function(e) {
   }
 
   function syncControlsLock() {
-    const overlayIds = ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal'];
+    const overlayIds = ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal', 'shop-modal'];
     session.controlsLocked = overlayIds.some(id => !$('#' + id)?.classList.contains('hidden'));
     if (session.controlsLocked) stopMapMovement();
   }
@@ -886,6 +935,13 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#btn-close-learning-profile').addEventListener('click', closeLearningProfile);
     $('#learning-profile-overlay').addEventListener('click', closeLearningProfile);
     $('#btn-wardrobe').addEventListener('click', openWardrobe);
+    $('#btn-shop').addEventListener('click', () => { sfx('click'); openShop('weapons'); });
+    $('#btn-map-shop').addEventListener('click', () => { sfx('click'); openShop('weapons'); });
+    $('#btn-close-shop').addEventListener('click', closeShop);
+    $('#shop-overlay').addEventListener('click', closeShop);
+    $$('.shop-tab').forEach(btn => {
+      btn.addEventListener('click', () => { sfx('click'); shopActiveTab = btn.dataset.shopTab; renderShop(); });
+    });
     $('#btn-close-wardrobe').addEventListener('click', closeWardrobe);
     $('#wardrobe-overlay').addEventListener('click', closeWardrobe);
     $('#btn-skill-tree').addEventListener('click', () => { sfx('click'); openSkillTree(); });
@@ -1263,6 +1319,12 @@ window.addEventListener('unhandledrejection', function(e) {
         }
       });
     });
+
+    // 战斗道具与武器技能
+    $('#weapon-strike-btn')?.addEventListener('click', useWeaponStrike);
+    $('#use-potion-btn')?.addEventListener('click', () => useConsumable('potion'));
+    $('#use-shield-btn')?.addEventListener('click', () => useConsumable('shield'));
+    $('#use-scroll-btn')?.addEventListener('click', () => useConsumable('scroll'));
   }
 
   // 设置
@@ -1393,7 +1455,7 @@ window.addEventListener('unhandledrejection', function(e) {
       button.addEventListener('click', () => {
         if (!owned) {
           if (state.player.gems < cosmetic.cost) {
-            showHint(`还需要 ${cosmetic.cost - state.player.gems} 星砂。装扮不会影响能力或战斗。`);
+            showHint(`还需要 ${cosmetic.cost - state.player.gems} 钻石。装扮不会影响能力或战斗。`);
             return;
           }
           state.player.gems -= cosmetic.cost;
@@ -1419,6 +1481,101 @@ window.addEventListener('unhandledrejection', function(e) {
     syncControlsLock();
   }
 
+  // ========== 商店：武器与道具 ==========
+  let shopActiveTab = 'weapons';
+
+  function openShop(tab = shopActiveTab) {
+    shopActiveTab = tab;
+    renderShop();
+    $('#shop-modal').classList.remove('hidden');
+    syncControlsLock();
+    trackEvent('shop_open', { tab });
+  }
+
+  function closeShop() {
+    $('#shop-modal').classList.add('hidden');
+    syncControlsLock();
+  }
+
+  function renderShop() {
+    $('#shop-gems').textContent = state.player.gems;
+    $$('.shop-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.shopTab === shopActiveTab));
+    const list = $('#shop-list');
+    list.innerHTML = '';
+
+    if (shopActiveTab === 'weapons') {
+      WEAPONS.forEach(weapon => {
+        const owned = state.inventory.weapons.includes(weapon.id);
+        const equipped = state.equipment.weapon === weapon.id;
+        const item = document.createElement('div');
+        item.className = 'shop-item' + (equipped ? ' equipped' : '');
+        item.innerHTML = `
+          <div class="shop-item-icon">${weapon.emoji}</div>
+          <div class="shop-item-name">${weapon.name}</div>
+          <div class="shop-item-desc">${weapon.desc}</div>
+          <div class="shop-item-stat">⚔️ 攻击 +${weapon.attackBonus}</div>
+        `;
+        const button = document.createElement('button');
+        button.className = 'genshin-btn small' + (equipped ? ' primary' : '');
+        button.textContent = equipped ? '使用中' : (owned ? '装备' : `购买 ${weapon.cost} 💎`);
+        button.disabled = equipped || (!owned && state.player.gems < weapon.cost);
+        button.addEventListener('click', () => {
+          if (!owned) {
+            if (state.player.gems < weapon.cost) {
+              showHint(`还需要 ${weapon.cost - state.player.gems} 钻石才能购买「${weapon.name}」。`);
+              return;
+            }
+            state.player.gems -= weapon.cost;
+            state.inventory.weapons.push(weapon.id);
+            sfx('collect');
+            showHint(`⚔️ 购入「${weapon.name}」！已自动装备。`);
+            trackEvent('shop_buy_weapon', { id: weapon.id, cost: weapon.cost });
+          } else {
+            sfx('click');
+          }
+          state.equipment.weapon = weapon.id;
+          updateMapHud();
+          saveGame();
+          renderShop();
+        });
+        item.appendChild(button);
+        list.appendChild(item);
+      });
+    } else {
+      CONSUMABLES.forEach(goods => {
+        const count = state.inventory.consumables[goods.id] || 0;
+        const item = document.createElement('div');
+        item.className = 'shop-item';
+        item.innerHTML = `
+          <div class="shop-item-icon">${goods.emoji}</div>
+          <div class="shop-item-name">${goods.name}</div>
+          <div class="shop-item-desc">${goods.desc}</div>
+          <div class="shop-owned-count">已拥有 ×${count}</div>
+        `;
+        const button = document.createElement('button');
+        button.className = 'genshin-btn small';
+        button.textContent = `购买 ${goods.cost} 💎`;
+        button.disabled = state.player.gems < goods.cost;
+        button.addEventListener('click', () => {
+          if (state.player.gems < goods.cost) {
+            showHint(`还需要 ${goods.cost - state.player.gems} 钻石才能购买「${goods.name}」。`);
+            return;
+          }
+          state.player.gems -= goods.cost;
+          state.inventory.consumables[goods.id] = (state.inventory.consumables[goods.id] || 0) + 1;
+          sfx('collect');
+          showHint(`${goods.emoji} 购入「${goods.name}」，战斗中可以使用！`);
+          trackEvent('shop_buy_consumable', { id: goods.id, cost: goods.cost });
+          updateMapHud();
+          saveGame();
+          renderShop();
+        });
+        item.appendChild(button);
+        list.appendChild(item);
+      });
+    }
+  }
+
   // 技能树：被动技能
   function hasPassive(id) {
     return Array.isArray(state.passives) && state.passives.includes(id);
@@ -1426,6 +1583,23 @@ window.addEventListener('unhandledrejection', function(e) {
 
   function getEffectiveMaxHp() {
     return state.player.maxHp + (hasPassive('hpBoost') ? 25 : 0);
+  }
+
+  // 玩家攻防：基础值随等级成长，武器提供攻击加成
+  function getEquippedWeapon() {
+    return WEAPONS.find(item => item.id === state.equipment.weapon) || WEAPONS[0];
+  }
+  function getPlayerAttack() {
+    return 10 + (state.player.level - 1) * 2 + getEquippedWeapon().attackBonus;
+  }
+  function getPlayerDefense() {
+    return 5 + Math.floor((state.player.level - 1) / 2);
+  }
+  function getEnemyAttack() {
+    return REGIONS[session.currentRegionId]?.enemyAttack ?? 12;
+  }
+  function getEnemyDefense() {
+    return REGIONS[session.currentRegionId]?.enemyDefense ?? 0;
   }
 
   function updateSkillPointsBadge() {
@@ -1471,7 +1645,7 @@ window.addEventListener('unhandledrejection', function(e) {
   function unlockPassive(skill) {
     if (hasPassive(skill.id)) return;
     if (state.player.gems < skill.cost) {
-      showHint(`还需要 ${skill.cost - state.player.gems} 星砂才能解锁「${skill.name}」。`);
+      showHint(`还需要 ${skill.cost - state.player.gems} 钻石才能解锁「${skill.name}」。`);
       return;
     }
     state.player.gems -= skill.cost;
@@ -1579,7 +1753,7 @@ window.addEventListener('unhandledrejection', function(e) {
       <div class="achievement-icon">${ach.icon}</div>
       <div class="achievement-info">
         <div class="achievement-name">成就解锁：${ach.name}</div>
-        <div class="achievement-desc">${ach.desc} · +${ach.reward} 星砂</div>
+        <div class="achievement-desc">${ach.desc} · +${ach.reward} 钻石</div>
       </div>
     `;
     document.body.appendChild(notif);
@@ -1741,7 +1915,7 @@ window.addEventListener('unhandledrejection', function(e) {
     task.claimed = true;
     grantRewards({ gems: def.reward });
     sfx('collect');
-    showHint(`🎉 领取任务奖励：${def.reward} 星砂！`);
+    showHint(`🎉 领取任务奖励：${def.reward} 钻石！`);
     trackEvent('quest_claim', { kind, id: def.id, reward: def.reward });
     saveGame();
     renderQuestList();
@@ -2491,7 +2665,7 @@ window.addEventListener('unhandledrejection', function(e) {
         saveGame();
         sfx('correct');
         // 每日/每周任务：收集水晶计数，完成提示并入本次拾取提示
-        showHint(`💎 获得 ${gems} 星砂！${questCompletionNote(recordQuestProgress('crystal', 1))}`);
+        showHint(`💎 获得 ${gems} 钻石！${questCompletionNote(recordQuestProgress('crystal', 1))}`);
         updateMinimap();
         checkAchievements();
       }
@@ -2511,7 +2685,7 @@ window.addEventListener('unhandledrejection', function(e) {
         saveGame();
         sfx('win');
         // 每日/每周任务：开启宝箱计数
-        showHint(`🎁 打开宝箱！获得 20 星砂和 30 经验！${levelsGained ? ` 等级提升到 ${state.player.level}！` : ''}${questCompletionNote(recordQuestProgress('chest', 1))}`);
+        showHint(`🎁 打开宝箱！获得 20 钻石和 30 经验！${levelsGained ? ` 等级提升到 ${state.player.level}！` : ''}${questCompletionNote(recordQuestProgress('chest', 1))}`);
         updateMinimap();
         checkAchievements();
       }
@@ -2538,7 +2712,7 @@ window.addEventListener('unhandledrejection', function(e) {
       saveGame();
       sfx('collect');
       // 每日/每周任务：发现隐藏区域计数
-      showHint(`✨ 发现隐藏区域「${areaNames[areaId] || areaId}」，获得 10 星砂！${questCompletionNote(recordQuestProgress('area', 1))}`);
+      showHint(`✨ 发现隐藏区域「${areaNames[areaId] || areaId}」，获得 10 钻石！${questCompletionNote(recordQuestProgress('area', 1))}`);
       checkAchievements();
     });
   }
@@ -2905,6 +3079,9 @@ window.addEventListener('unhandledrejection', function(e) {
     session.buffDoubleEnergy = 0;
     session.streakGuardUsed = false;
     session.reviveUsed = false;
+    session.weaponStrikeUsed = false;
+    session.itemShield = false;
+    session.enemyStunned = false;
 
     // 使用动态生成的题目（如果有），否则用静态题目
     let questions = null;
@@ -3890,7 +4067,9 @@ window.addEventListener('unhandledrejection', function(e) {
     enemySprite.style.backgroundImage = hasWindPortrait ? `url("${VISUAL_ASSETS.windGuardian}")` : '';
     enemySprite.textContent = hasWindPortrait ? '' : region.enemyEmoji;
     $('#enemy-element').textContent = region.emoji;
-    $('#enemy-sprite').classList.remove('shake', 'defeated');
+    $('#enemy-sprite').classList.remove('shake', 'defeated', 'stunned');
+    const enemyStatsEl = $('#enemy-stats');
+    if (enemyStatsEl) enemyStatsEl.textContent = `⚔️ ${getEnemyAttack()} · 🛡️ ${getEnemyDefense()}`;
     $('#question-tag').textContent = ELEMENTS.find(e => e.id === level.skill)?.name || '数学思维';
     $('#question-tag').style.background = ELEMENTS.find(e => e.id === level.skill)?.color || '#74c2a8';
     // 全部元素技能保持可点：本关元素给出专属提示，其他元素消耗能量，用于连续触发元素反应
@@ -3924,6 +4103,32 @@ window.addEventListener('unhandledrejection', function(e) {
     } else {
       burst.classList.add('disabled');
     }
+
+    // 武器与道具状态
+    const weapon = getEquippedWeapon();
+    const weaponInfo = $('#player-weapon-info');
+    if (weaponInfo) weaponInfo.textContent = `${weapon.emoji} ${weapon.name} ⚔️${getPlayerAttack()}`;
+    const strikeBtn = $('#weapon-strike-btn');
+    if (strikeBtn) {
+      strikeBtn.disabled = session.weaponStrikeUsed;
+      strikeBtn.classList.toggle('used', session.weaponStrikeUsed);
+      $('#weapon-strike-emoji').textContent = weapon.emoji;
+      $('#weapon-strike-count').textContent = session.weaponStrikeUsed ? '0' : '1';
+    }
+    const itemButtons = { potion: '#use-potion-btn', shield: '#use-shield-btn', scroll: '#use-scroll-btn' };
+    Object.entries(itemButtons).forEach(([id, selector]) => {
+      const btn = $(selector);
+      if (!btn) return;
+      const count = state.inventory.consumables[id] || 0;
+      const countEl = $(`#${id}-count`);
+      if (countEl) countEl.textContent = count;
+      btn.disabled = count <= 0;
+    });
+  }
+
+  // 弱点题：每场战斗中间那道题为怪物弱点，答对可"破防"震慑怪物
+  function getWeaknessIndex() {
+    return Math.floor((session.currentQuestions.length - 1) / 2);
   }
 
   function renderBattleQuestion() {
@@ -3934,7 +4139,16 @@ window.addEventListener('unhandledrejection', function(e) {
     if (!Number.isInteger(session.questionAttempts[questionIndex])) session.questionAttempts[questionIndex] = 0;
     if (!Number.isInteger(session.questionHintTiers[questionIndex])) session.questionHintTiers[questionIndex] = 0;
     renderBattleStages();
-    $('#question-text').textContent = q.text;
+    const questionTextEl = $('#question-text');
+    questionTextEl.textContent = q.text;
+    const oldBadge = questionTextEl.parentElement.querySelector('.weakness-badge');
+    if (oldBadge) oldBadge.remove();
+    if (questionIndex === getWeaknessIndex()) {
+      const badge = document.createElement('span');
+      badge.className = 'weakness-badge';
+      badge.textContent = '⚡ 怪物弱点';
+      questionTextEl.appendChild(badge);
+    }
     $('#question-visual').innerHTML = '';
     if (q.visual) renderVisual(q.visual);
 
@@ -4050,6 +4264,19 @@ window.addEventListener('unhandledrejection', function(e) {
         session.transferHintTier = hintTier;
       }
 
+      // 武器加成只改变伤害数字的观感（被怪物防御削弱），不改变题目进度约束
+      const weaponBonus = Math.max(0, getEquippedWeapon().attackBonus - getEnemyDefense());
+      let shownDamage = damage + weaponBonus;
+
+      // 弱点题答对：破防震慑，怪物下一次攻击无效，额外能量
+      const isWeakness = questionIndex === getWeaknessIndex();
+      if (isWeakness) {
+        session.enemyStunned = true;
+        shownDamage *= 2;
+        showStunOverlay('⚡ 破防！怪物被震慑');
+        $('#enemy-sprite').classList.add('stunned');
+      }
+
       if (session.correctStreak >= 3) {
         sfx('streak');
         triggerElementalReaction('resonance');
@@ -4061,13 +4288,14 @@ window.addEventListener('unhandledrejection', function(e) {
       ]);
       if (answerQuestNote) showHint(answerQuestNote);
       let energyGain = Math.round(34 * (hasPassive('energyGain') ? 1.5 : 1));
+      if (isWeakness) energyGain += 16;
       if (session.buffDoubleEnergy > 0) {
         // 元素反应增益：接下来若干题答对能量翻倍
         energyGain *= 2;
         session.buffDoubleEnergy--;
       }
       state.player.energy = Math.min(state.player.maxEnergy, state.player.energy + energyGain);
-      showDamage(damage);
+      showDamage(shownDamage);
       setTimeout(() => {
         $('#enemy-sprite').classList.add('shake');
         setTimeout(() => $('#enemy-sprite').classList.remove('shake'), 400);
@@ -4085,12 +4313,22 @@ window.addEventListener('unhandledrejection', function(e) {
         state.player.answerStreak = 0;
       }
       session.wrongAnswers++;
-      if (session.buffShield) {
+      // 怪物反击：伤害 = 怪物攻击 − 玩家防御，震慑/护盾可抵挡
+      if (session.enemyStunned) {
+        session.enemyStunned = false;
+        $('#enemy-sprite')?.classList.remove('stunned');
+        notes.push('💫 怪物被震慑，这次反击落空了');
+      } else if (session.itemShield) {
+        session.itemShield = false;
+        notes.push('🛡️ 护盾符文抵挡了这次攻击');
+      } else if (session.buffShield) {
         // 元素反应护盾：抵挡一次答错伤害
         session.buffShield = false;
         notes.push('✨ 元素护盾抵挡了这次伤害');
       } else {
-        state.player.hp = Math.max(0, state.player.hp - 15);
+        const enemyHit = Math.max(1, getEnemyAttack() - getPlayerDefense());
+        state.player.hp = Math.max(0, state.player.hp - enemyHit);
+        notes.push(`${REGIONS[session.currentRegionId]?.enemyName || '怪物'}反击：-${enemyHit} 生命`);
       }
       const misconception = Learning.MISCONCEPTIONS[session.currentLevel.id];
       if (misconception) notes.push(`再观察一次：${misconception.recovery}`);
@@ -4134,6 +4372,60 @@ window.addEventListener('unhandledrejection', function(e) {
     el.classList.remove('show');
     void el.offsetWidth; // 触发重排
     el.classList.add('show');
+  }
+
+  // 破防/震慑提示：浮现在怪物头顶
+  function showStunOverlay(text) {
+    const stage = $('.enemy-stage');
+    if (!stage) return;
+    const el = document.createElement('div');
+    el.className = 'stun-overlay';
+    el.textContent = text;
+    stage.appendChild(el);
+    setTimeout(() => el.remove(), 1400);
+  }
+
+  // 武器技能：每场战斗一次，震慑怪物（下一次反击无效）并造成可观的观感伤害
+  function useWeaponStrike() {
+    if (session.weaponStrikeUsed) return;
+    session.weaponStrikeUsed = true;
+    session.enemyStunned = true;
+    const weapon = getEquippedWeapon();
+    const strikeDamage = getPlayerAttack() + weapon.attackBonus;
+    sfx('burst');
+    showDamage(strikeDamage);
+    showStunOverlay(`${weapon.emoji} ${weapon.name}！怪物被震慑`);
+    $('#enemy-sprite').classList.add('stunned');
+    setTimeout(() => {
+      $('#enemy-sprite').classList.add('shake');
+      setTimeout(() => $('#enemy-sprite').classList.remove('shake'), 400);
+    }, 100);
+    trackEvent('weapon_strike', { weapon: weapon.id, levelId: session.currentLevel?.id });
+    updateHud();
+  }
+
+  // 使用消耗品：生命药水 / 护盾符文 / 智慧卷轴
+  function useConsumable(id) {
+    if ((state.inventory.consumables[id] || 0) <= 0) return;
+    const goods = CONSUMABLES.find(item => item.id === id);
+    if (!goods) return;
+    state.inventory.consumables[id]--;
+    if (id === 'potion') {
+      const heal = 40;
+      state.player.hp = Math.min(getEffectiveMaxHp(), state.player.hp + heal);
+      sfx('correct');
+      showHint(`🧪 生命药水：恢复 ${heal} 点生命！`);
+    } else if (id === 'shield') {
+      session.itemShield = true;
+      sfx('collect');
+      showHint('🛡️ 护盾符文生效：将抵挡怪物的下一次攻击！');
+    } else if (id === 'scroll') {
+      useTieredHint(2, 'scroll');
+      sfx('collect');
+    }
+    trackEvent('consumable_use', { id, levelId: session.currentLevel?.id });
+    updateHud();
+    saveGame();
   }
 
   // 元素反应特效
@@ -4304,7 +4596,15 @@ window.addEventListener('unhandledrejection', function(e) {
     if (session.battleResolved) return;
     session.battleResolved = true;
     sfx('lose');
-    showHint('💔 你失败了！不过别灰心，数学就是不断试错。点击“继续冒险”重新挑战。');
+    const enemyName = REGIONS[session.currentRegionId]?.enemyName || '怪物';
+    const tips = [`💔 被${enemyName}打败了！别灰心，数学就是不断试错。`];
+    if ((state.inventory.consumables.potion || 0) > 0) {
+      tips.push('背包里有生命药水，下次战斗开始时记得带上使用。');
+    } else if (state.player.gems >= 20) {
+      tips.push('去商店买一瓶生命药水（20 💎），关键时刻能救命。');
+    }
+    tips.push('再挑战一次吧！');
+    showHint(tips.join(' '), 3500);
     setTimeout(() => {
       closeHint();
       if (session.currentRegionId !== null) {
@@ -4312,7 +4612,7 @@ window.addEventListener('unhandledrejection', function(e) {
       } else {
         showScreen('world-map'); renderMap();
       }
-    }, 2000);
+    }, 3500);
   }
 
   function showReward(level, region, result) {
