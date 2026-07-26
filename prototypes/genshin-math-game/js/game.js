@@ -932,7 +932,7 @@ window.addEventListener('unhandledrejection', function(e) {
 
     function handleMapClick(e) {
       if (!session.mapActive || session.controlsLocked) return;
-      if (e.target.closest('.landmark, .waypoint, .npc, .map-header, .region-enter-prompt')) return;
+      if (e.target.closest('.landmark, .waypoint, .npc, .map-header, .region-enter-prompt, .virtual-joystick, .mobile-action-btn, .map-controls')) return;
       focusWorldMap();
       const rect = $('#world-canvas').getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -1025,6 +1025,7 @@ window.addEventListener('unhandledrejection', function(e) {
     });
 
     // 虚拟摇杆：拖动控制移动，松手复位
+    // 关键：阻止事件冒泡到地图，防止按摇杆变成“点击地图自动寻路”。
     (function setupJoystick() {
       const joystick = $('#virtual-joystick');
       const stick = $('#joystick-stick');
@@ -1060,54 +1061,101 @@ window.addEventListener('unhandledrejection', function(e) {
         session.joystick.active = dist > 2;
       }
 
-      joystick.addEventListener('pointerdown', event => {
+      function onPointerDown(event) {
         if (!session.mapActive || session.controlsLocked) return;
         event.preventDefault();
+        event.stopPropagation();
         dragging = true;
         currentPointerId = event.pointerId;
+        // 开始使用摇杆时，立即取消之前的点击目标，防止摇杆和自动寻路冲突
+        session.targetX = session.playerX;
+        session.targetY = session.playerY;
+        session.isMoving = false;
+        session.moveMode = null;
         try { joystick.setPointerCapture(event.pointerId); } catch (e) {}
         const rect = joystick.getBoundingClientRect();
         centerX = rect.left + rect.width / 2;
         centerY = rect.top + rect.height / 2;
         joystick.classList.add('active');
         updateStick(event.clientX, event.clientY);
-      });
+      }
 
-      joystick.addEventListener('pointermove', event => {
+      function onPointerMove(event) {
         if (!dragging || event.pointerId !== currentPointerId) return;
         event.preventDefault();
+        event.stopPropagation();
         updateStick(event.clientX, event.clientY);
-      });
+      }
 
-      joystick.addEventListener('pointerup', event => {
-        if (event.pointerId !== currentPointerId) return;
+      function onPointerUp(event) {
+        if (!dragging || event.pointerId !== currentPointerId) return;
+        event.preventDefault();
+        event.stopPropagation();
         resetStick();
-      });
-      joystick.addEventListener('pointercancel', event => {
-        if (event.pointerId !== currentPointerId) return;
+      }
+
+      joystick.addEventListener('pointerdown', onPointerDown);
+      joystick.addEventListener('pointermove', onPointerMove);
+      joystick.addEventListener('pointerup', onPointerUp);
+      joystick.addEventListener('pointercancel', onPointerUp);
+      joystick.addEventListener('lostpointercapture', onPointerUp);
+
+      // 安全网：某些浏览器 pointer capture 丢失后没有正确触发 pointerup，
+      // 在 window 层面再监听一次同 id 的 pointerup。
+      window.addEventListener('pointerup', event => {
+        if (dragging && event.pointerId === currentPointerId) resetStick();
+      }, { passive: false });
+      window.addEventListener('pointercancel', event => {
+        if (dragging && event.pointerId === currentPointerId) resetStick();
+      }, { passive: false });
+
+      // 兜底：阻止 touch 事件冒泡到地图（兼容部分 Android 浏览器的 passive 处理）
+      joystick.addEventListener('touchstart', event => {
+        event.preventDefault();
+        event.stopPropagation();
+      }, { passive: false });
+      joystick.addEventListener('touchmove', event => {
+        event.preventDefault();
+        event.stopPropagation();
+      }, { passive: false });
+      joystick.addEventListener('touchend', event => {
+        event.preventDefault();
+        event.stopPropagation();
         resetStick();
-      });
-      joystick.addEventListener('lostpointercapture', event => {
-        if (event.pointerId !== currentPointerId) return;
-        resetStick();
-      });
+      }, { passive: false });
     })();
 
     // 移动端交互按钮：靠近可交互目标时高亮，点击触发对应操作
     (function setupMobileAction() {
       const btn = $('#mobile-action-btn');
       if (!btn) return;
-      btn.addEventListener('pointerdown', event => {
+      function handleStart(event) {
         event.preventDefault();
+        event.stopPropagation();
         btn.style.transform = 'scale(0.94)';
-      });
-      btn.addEventListener('pointerup', event => {
+      }
+      function handleEnd(event) {
         event.preventDefault();
+        event.stopPropagation();
         btn.style.transform = 'scale(1)';
         triggerMobileAction();
-      });
-      btn.addEventListener('pointercancel', () => { btn.style.transform = 'scale(1)'; });
-      btn.addEventListener('lostpointercapture', () => { btn.style.transform = 'scale(1)'; });
+      }
+      function handleCancel() {
+        btn.style.transform = 'scale(1)';
+      }
+      btn.addEventListener('pointerdown', handleStart);
+      btn.addEventListener('pointerup', handleEnd);
+      btn.addEventListener('pointercancel', handleCancel);
+      btn.addEventListener('lostpointercapture', handleCancel);
+      btn.addEventListener('touchstart', event => {
+        event.preventDefault();
+        event.stopPropagation();
+      }, { passive: false });
+      btn.addEventListener('touchend', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        triggerMobileAction();
+      }, { passive: false });
     })();
 
     // 进入区域按钮
