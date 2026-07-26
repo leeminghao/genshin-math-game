@@ -271,8 +271,20 @@ async function solveBattle() {
   const count = await evaluate('window.__game.session.currentQuestions.length');
   for (let index = 0; index < count; index++) {
     await evaluate(`(() => {
-      const answer = window.__game.session.currentQuestions[window.__game.session.currentQuestionIndex].answer;
-      [...document.querySelectorAll('.answer-btn')].find(button => button.textContent == answer).click();
+      const q = window.__game.session.currentQuestions[window.__game.session.currentQuestionIndex];
+      if (q.interaction) {
+        if (q.interaction.type === 'tapCount') {
+          [...document.querySelectorAll('.tapcount-cell')].slice(0, q.interaction.target).forEach(c => c.click());
+        } else if (q.interaction.type === 'dragSplit') {
+          const zones = [...document.querySelectorAll('.dragsplit-zone')];
+          const items = [...document.querySelectorAll('.dragsplit-item')];
+          const per = Math.floor(q.interaction.total / q.interaction.zones);
+          items.forEach((item, i) => { zones[Math.floor(i / per)].click(); item.click(); });
+        }
+        document.querySelector('.interaction-confirm-bar .genshin-btn').click();
+        return;
+      }
+      [...document.querySelectorAll('.answer-btn')].find(button => button.textContent == q.answer).click();
     })()`);
     if (index < count - 1) {
       await waitFor(`window.__game.session.currentQuestionIndex === ${index + 1} && window.__game.session.answered === false`);

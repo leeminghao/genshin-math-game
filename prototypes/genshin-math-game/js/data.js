@@ -190,19 +190,37 @@ const LEVELS = [
     {
       id: '0-5', name: '连加连减', desc: '三个数的连续运算',
       skill: 'anemo',
-      intro: [{ speaker: '星芽', emoji: '🧚', text: '连加连减要从左到右依次计算。' }],
+      intro: [{ speaker: '星芽', emoji: '🧚', text: '风场上的风种会落下、聚集，也会被吹走。我们一边点一边算，就知道最后剩几颗啦！' }],
       questions: [
-        { text: '23 + 15 + 7 = ?', options: [35, 40, 45, 50], answer: 45, hint: '先算 23+7=30。' },
-        { text: '56 - 12 - 8 = ?', options: [32, 36, 40, 44], answer: 36, hint: '56-(12+8)=36。' }
+        {
+          text: '风场上先落下 3 颗风种，又落下 4 颗，后来被风吹走 2 颗。点亮现在还留在场上的风种！',
+          options: [4, 5, 6, 7], answer: 5,
+          hint: '3 + 4 = 7，7 - 2 = 5。把吹走的 2 颗留空，点亮剩下的。',
+          interaction: {
+            type: 'tapCount', mode: 'fill',
+            item: '🍃', itemName: '风种',
+            rows: 1, cols: 7, target: 5
+          }
+        },
+        { text: '风车村收集了 23 颗风种，又收集 15 颗，送出 7 颗，还剩多少颗？', options: [21, 31, 35, 45], answer: 31, hint: '23 + 15 = 38，38 - 7 = 31。从左到右依次算。' }
       ]
     },
     {
       id: '0-6', name: '乘法口诀', desc: '口诀记忆与逆用',
       skill: 'anemo',
-      intro: [{ speaker: '星芽', emoji: '🧚', text: '乘法口诀可以解决乘法和除法。' }],
+      intro: [{ speaker: '星芽', emoji: '🧚', text: '风铃挂成整齐的行和列，不用一只只数，乘法口诀一下子就算出来！' }],
       questions: [
-        { text: '7 × 8 = ?', options: [54, 56, 58, 64], answer: 56, hint: '七八五十六。' },
-        { text: '54 ÷ 6 = ?', options: [7, 8, 9, 10], answer: 9, hint: '六九五十四。' }
+        {
+          text: '庭院里的风铃挂成 4 行 3 列。点亮全部风铃，看看一共挂了多少只！',
+          options: [7, 10, 12, 14], answer: 12,
+          hint: '每行 3 只，4 行：3 × 4 = 12。可以点「整行点亮」更快。',
+          interaction: {
+            type: 'tapCount', mode: 'fill',
+            item: '🔔', itemName: '风铃',
+            rows: 4, cols: 3, target: 12
+          }
+        },
+        { text: '36 只风铃要平均分挂到 4 个窗口，每个窗口挂几只？（想口诀：四九三十六）', options: [6, 8, 9, 12], answer: 9, hint: '36 ÷ 4 = 9。' }
       ]
     }
   ],
