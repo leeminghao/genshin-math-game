@@ -262,6 +262,8 @@ window.addEventListener('unhandledrejection', function(e) {
     isMoving: false,
     moveMode: null,
     moveKeys: { w: false, a: false, s: false, d: false, arrowup: false, arrowdown: false, arrowleft: false, arrowright: false },
+    // 虚拟摇杆向量（-1 ~ 1）
+    joystick: { x: 0, y: 0, active: false },
     // 冲刺与体力（原神式：按住 Shift 加速，体力耗尽则无法冲刺）
     sprintKey: false,
     stamina: 100,
@@ -271,6 +273,7 @@ window.addEventListener('unhandledrejection', function(e) {
     shownRegionBanners: [],
     currentLandmark: null,
     currentWaypoint: null,
+    mobileActionTarget: null,
     cameraX: 0,
     cameraY: 0,
     mapActive: false,
@@ -597,12 +600,14 @@ window.addEventListener('unhandledrejection', function(e) {
       isMoving: false,
       moveMode: null,
       moveKeys: { w: false, a: false, s: false, d: false, arrowup: false, arrowdown: false, arrowleft: false, arrowright: false },
+      joystick: { x: 0, y: 0, active: false },
       sprintKey: false,
       stamina: 100,
       currentRegionArea: null,
       shownRegionBanners: [],
       currentLandmark: null,
       currentWaypoint: null,
+      mobileActionTarget: null,
       mapActive: false,
       bumpAt: 0,
       collectedItems: [],
@@ -1018,6 +1023,92 @@ window.addEventListener('unhandledrejection', function(e) {
       button.addEventListener('pointercancel', stop);
       button.addEventListener('lostpointercapture', stop);
     });
+
+    // 虚拟摇杆：拖动控制移动，松手复位
+    (function setupJoystick() {
+      const joystick = $('#virtual-joystick');
+      const stick = $('#joystick-stick');
+      if (!joystick || !stick) return;
+
+      const maxRadius = 34; // 摇杆最大偏移（像素）
+      let dragging = false;
+      let centerX = 0;
+      let centerY = 0;
+      let currentPointerId = null;
+
+      function resetStick() {
+        dragging = false;
+        currentPointerId = null;
+        session.joystick.active = false;
+        session.joystick.x = 0;
+        session.joystick.y = 0;
+        stick.style.transform = 'translate(0px, 0px)';
+        joystick.classList.remove('active');
+      }
+
+      function updateStick(clientX, clientY) {
+        let dx = clientX - centerX;
+        let dy = clientY - centerY;
+        const dist = Math.hypot(dx, dy);
+        if (dist > maxRadius) {
+          dx = (dx / dist) * maxRadius;
+          dy = (dy / dist) * maxRadius;
+        }
+        stick.style.transform = `translate(${dx}px, ${dy}px)`;
+        session.joystick.x = dx / maxRadius;
+        session.joystick.y = dy / maxRadius;
+        session.joystick.active = dist > 2;
+      }
+
+      joystick.addEventListener('pointerdown', event => {
+        if (!session.mapActive || session.controlsLocked) return;
+        event.preventDefault();
+        dragging = true;
+        currentPointerId = event.pointerId;
+        try { joystick.setPointerCapture(event.pointerId); } catch (e) {}
+        const rect = joystick.getBoundingClientRect();
+        centerX = rect.left + rect.width / 2;
+        centerY = rect.top + rect.height / 2;
+        joystick.classList.add('active');
+        updateStick(event.clientX, event.clientY);
+      });
+
+      joystick.addEventListener('pointermove', event => {
+        if (!dragging || event.pointerId !== currentPointerId) return;
+        event.preventDefault();
+        updateStick(event.clientX, event.clientY);
+      });
+
+      joystick.addEventListener('pointerup', event => {
+        if (event.pointerId !== currentPointerId) return;
+        resetStick();
+      });
+      joystick.addEventListener('pointercancel', event => {
+        if (event.pointerId !== currentPointerId) return;
+        resetStick();
+      });
+      joystick.addEventListener('lostpointercapture', event => {
+        if (event.pointerId !== currentPointerId) return;
+        resetStick();
+      });
+    })();
+
+    // 移动端交互按钮：靠近可交互目标时高亮，点击触发对应操作
+    (function setupMobileAction() {
+      const btn = $('#mobile-action-btn');
+      if (!btn) return;
+      btn.addEventListener('pointerdown', event => {
+        event.preventDefault();
+        btn.style.transform = 'scale(0.94)';
+      });
+      btn.addEventListener('pointerup', event => {
+        event.preventDefault();
+        btn.style.transform = 'scale(1)';
+        triggerMobileAction();
+      });
+      btn.addEventListener('pointercancel', () => { btn.style.transform = 'scale(1)'; });
+      btn.addEventListener('lostpointercapture', () => { btn.style.transform = 'scale(1)'; });
+    })();
 
     // 进入区域按钮
     $('#btn-enter-region').addEventListener('click', () => {
@@ -1927,6 +2018,7 @@ window.addEventListener('unhandledrejection', function(e) {
         try { checkHiddenAreas(); } catch (e) { console.warn('checkHiddenAreas error', e); }
         try { checkStoryTriggers(); } catch (e) { console.warn('checkStoryTriggers error', e); }
         try { checkRegionDiscovery(); } catch (e) { console.warn('checkRegionDiscovery error', e); }
+        try { updateMobileActionButton(); } catch (e) { console.warn('updateMobileActionButton error', e); }
       }
       try { updateCompass(); } catch (e) { console.warn('updateCompass error', e); }
       try { drawMinimap(); } catch (e) { console.warn('drawMinimap error', e); }
@@ -1944,19 +2036,27 @@ window.addEventListener('unhandledrejection', function(e) {
     else session.stamina = Math.min(100, session.stamina + 12 * dt);
     let dx = 0, dy = 0;
 
-    // 键盘移动优先
+    // 键盘移动
     if (session.moveKeys.w || session.moveKeys.arrowup) dy -= 1;
     if (session.moveKeys.s || session.moveKeys.arrowdown) dy += 1;
     if (session.moveKeys.a || session.moveKeys.arrowleft) dx -= 1;
     if (session.moveKeys.d || session.moveKeys.arrowright) dx += 1;
 
+    // 虚拟摇杆输入（与键盘叠加后统一归一化，防止对角超速）
+    if (session.joystick.active) {
+      dx += session.joystick.x;
+      dy += session.joystick.y;
+    }
+
     if (dx !== 0 || dy !== 0) {
-      // 键盘直接移动，取消点击目标
+      // 直接控制移动，取消点击目标
       session.isMoving = true;
       session.moveMode = 'keyboard';
       const len = Math.hypot(dx, dy);
-      session.playerX += (dx / len) * speed * dt;
-      session.playerY += (dy / len) * speed * dt;
+      const nx = dx / len;
+      const ny = dy / len;
+      session.playerX += nx * speed * dt;
+      session.playerY += ny * speed * dt;
       // 记录方向
       if (Math.abs(dx) > Math.abs(dy)) {
         session.facing = dx > 0 ? 'right' : 'left';
@@ -2158,6 +2258,73 @@ window.addEventListener('unhandledrejection', function(e) {
         // 已激活的传送点直接打开传送菜单
         showTeleportMenu();
       }
+    }
+  }
+
+  // 移动端交互按钮：检测最近的可交互目标并更新按钮状态
+  function updateMobileActionButton() {
+    const btn = $('#mobile-action-btn');
+    if (!btn) return;
+    if (!session.mapActive || session.controlsLocked) {
+      btn.classList.add('hidden');
+      return;
+    }
+
+    const candidates = [];
+
+    $$('.landmark').forEach(lm => {
+      const rid = parseInt(lm.dataset.region);
+      const lx = parseInt(lm.style.left);
+      const ly = parseInt(lm.style.top);
+      const dist = Math.hypot(session.playerX - lx, session.playerY - ly);
+      if (dist < 100) candidates.push({ type: 'landmark', id: rid, dist, label: '进入' });
+    });
+
+    $$('.waypoint').forEach(wp => {
+      const wid = parseInt(wp.dataset.waypoint);
+      const wx = parseInt(wp.style.left);
+      const wy = parseInt(wp.style.top);
+      const dist = Math.hypot(session.playerX - wx, session.playerY - wy);
+      if (dist < 80) {
+        const activated = session.activatedWaypoints.includes(wid);
+        candidates.push({ type: 'waypoint', id: wid, dist, label: activated ? '传送' : '激活' });
+      }
+    });
+
+    $$('.npc').forEach(npc => {
+      const npcId = parseInt(npc.dataset.npc);
+      const nx = parseInt(npc.style.left);
+      const ny = parseInt(npc.style.top);
+      const dist = Math.hypot(session.playerX - nx, session.playerY - ny);
+      if (dist < 90) candidates.push({ type: 'npc', id: npcId, dist, label: '对话' });
+    });
+
+    const target = candidates.sort((a, b) => a.dist - b.dist)[0] || null;
+    if (target) {
+      btn.classList.remove('hidden');
+      const label = btn.querySelector('.action-btn-label');
+      if (label) label.textContent = target.label;
+      session.mobileActionTarget = target;
+    } else {
+      btn.classList.add('hidden');
+      session.mobileActionTarget = null;
+    }
+  }
+
+  function triggerMobileAction() {
+    const target = session.mobileActionTarget;
+    if (!target) return;
+    sfx('click');
+    if (target.type === 'landmark') {
+      tryEnterRegion(target.id);
+    } else if (target.type === 'waypoint') {
+      if (session.activatedWaypoints.includes(target.id)) {
+        showTeleportMenu();
+      } else {
+        activateWaypoint(target.id);
+      }
+    } else if (target.type === 'npc') {
+      startNpcDialog(target.id);
     }
   }
 

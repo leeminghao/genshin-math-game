@@ -587,17 +587,20 @@ try {
   });
   await fresh();
   report.mobileMap = await evaluate(`(() => {
-    const dpad = document.querySelector('.touch-dpad').getBoundingClientRect();
+    const joystick = document.querySelector('.virtual-joystick').getBoundingClientRect();
+    const actionBtn = document.querySelector('.mobile-action-btn').getBoundingClientRect();
     const header = document.querySelector('.map-header').getBoundingClientRect();
     return {
       viewport: [innerWidth, innerHeight],
-      dpadInside: dpad.left >= 0 && dpad.right <= innerWidth && dpad.bottom <= innerHeight,
+      joystickVisible: getComputedStyle(document.querySelector('.virtual-joystick')).display !== 'none',
+      joystickInside: joystick.left >= 0 && joystick.right <= innerWidth && joystick.bottom <= innerHeight,
+      actionBtnInside: actionBtn.left >= 0 && actionBtn.right <= innerWidth && actionBtn.top >= 0 && actionBtn.bottom <= innerHeight,
       headerInside: header.left >= 0 && header.right <= innerWidth,
       horizontalOverflow: document.documentElement.scrollWidth > innerWidth
     };
   })()`);
   assert.deepEqual(report.mobileMap, {
-    viewport: [390, 844], dpadInside: true, headerInside: true, horizontalOverflow: false
+    viewport: [390, 844], joystickVisible: true, joystickInside: true, actionBtnInside: true, headerInside: true, horizontalOverflow: false
   });
   await capture('06-mobile-map');
   await enterWindRegion();

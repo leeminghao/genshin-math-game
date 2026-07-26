@@ -2,9 +2,11 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>数境远征：艾瑟里亚数理冒险</title>
-  <link rel="stylesheet" href="css/style.css?v=4.7">
+  <link rel="stylesheet" href="css/style.css?v=4.8">
 </head>
 <body>
   <div id="app">
@@ -52,7 +54,7 @@
         </div>
         <div class="menu-guide-line"><span class="guide-dot"></span>星芽会陪你观察，答错也可以随时重来。</div>
       </div>
-      <div class="version">2D 开放世界 · 数境大陆 v4.7</div>
+      <div class="version">2D 开放世界 · 数境大陆 v4.8</div>
     </section>
 
     <!-- 三题能力诊断 -->
@@ -450,13 +452,24 @@
 
 
       <div class="map-controls">
-        <div class="control-hint"><strong>探索方式</strong><span>WASD / 方向键，或点击地图</span></div>
+        <div class="control-hint"><strong>探索方式</strong><span>WASD / 方向键 / 点击地图 / 摇杆</span></div>
         <div class="touch-dpad" aria-label="地图移动控制">
           <button data-map-move="arrowup" aria-label="向上移动">▲</button>
           <button data-map-move="arrowleft" aria-label="向左移动">◀</button>
           <button data-map-move="arrowdown" aria-label="向下移动">▼</button>
           <button data-map-move="arrowright" aria-label="向右移动">▶</button>
         </div>
+        <div class="virtual-joystick" id="virtual-joystick" aria-label="虚拟摇杆">
+          <div class="joystick-base">
+            <div class="joystick-stick" id="joystick-stick"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 移动端交互按钮 -->
+      <div class="mobile-action-btn hidden" id="mobile-action-btn" aria-label="交互">
+        <div class="action-btn-ring"></div>
+        <span class="action-btn-label">交互</span>
       </div>
 
       <!-- 任务日志 -->
@@ -770,8 +783,8 @@
     </section>
   </div>
 
-  <script src="js/data.js?v=4.7"></script>
-  <script src="js/learning.js?v=4.7"></script>
-  <script src="js/game.js?v=4.7"></script>
+  <script src="js/data.js?v=4.8"></script>
+  <script src="js/learning.js?v=4.8"></script>
+  <script src="js/game.js?v=4.8"></script>
 </body>
 </html>

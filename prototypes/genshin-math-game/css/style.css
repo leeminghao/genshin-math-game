@@ -3816,3 +3816,230 @@ html.reduced-motion *::after {
   0% { opacity: 0.85; transform: translateY(0) scale(0.8); }
   100% { opacity: 0; transform: translateY(-22px) scale(1.15); }
 }
+
+
+/* ========== 移动端 / 平板触控优化 ========== */
+
+/* 全局禁止默认触摸行为（缩放、滚动、长按菜单），提升游戏手感 */
+#app,
+.screen,
+.open-world,
+.world-canvas,
+.touch-dpad,
+.virtual-joystick,
+.mobile-action-btn {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 虚拟摇杆 */
+.virtual-joystick {
+  display: none;
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+.joystick-base {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(11,15,23,0.55);
+  border: 2px solid rgba(232,212,154,0.35);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+}
+.joystick-stick {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 52px; height: 52px;
+  margin-left: -26px; margin-top: -26px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(232,212,154,0.95), rgba(184,155,94,0.95));
+  border: 2px solid #fff8e0;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+  transition: transform 0.05s linear;
+}
+.virtual-joystick.active .joystick-base {
+  background: rgba(11,15,23,0.7);
+  border-color: rgba(232,212,154,0.55);
+}
+
+/* 移动端交互按钮 */
+.mobile-action-btn {
+  position: absolute;
+  right: 24px;
+  bottom: 110px;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(232,212,154,0.95), rgba(184,155,94,0.95));
+  border: 3px solid #fff8e0;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.45), inset 0 2px 6px rgba(255,255,255,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  cursor: pointer;
+  transform: scale(1);
+  transition: transform 0.1s, opacity 0.2s;
+  touch-action: none;
+}
+.mobile-action-btn.hidden {
+  display: none;
+}
+.mobile-action-btn:active {
+  transform: scale(0.94);
+}
+.mobile-action-btn .action-btn-ring {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 2px solid rgba(232,212,154,0.5);
+  animation: action-ring-pulse 1.5s infinite;
+}
+@keyframes action-ring-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.12); opacity: 0.2; }
+}
+.mobile-action-btn .action-btn-label {
+  color: #3a2e12;
+  font-size: 16px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+/* 平板横竖屏通用：显示摇杆、放大方向键 */
+@media (hover: none) and (pointer: coarse), (max-width: 1024px) {
+  .virtual-joystick { display: block; }
+  .touch-dpad { display: none; }
+  .control-hint { display: none; }
+  .mobile-action-btn { display: flex; }
+  .mobile-action-btn.hidden { display: none; }
+
+  .map-controls {
+    top: auto;
+    left: 18px;
+    bottom: 36px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .map-header-actions .icon-btn {
+    width: 42px;
+    height: 42px;
+    font-size: 18px;
+  }
+
+  .minimap-container {
+    top: 86px;
+    right: 14px;
+  }
+
+  /* 增大可点击目标 */
+  .landmark {
+    width: 130px;
+    height: 150px;
+    margin-left: -65px;
+    margin-top: -75px;
+  }
+  .landmark-icon {
+    width: 90px;
+    height: 90px;
+    font-size: 44px;
+  }
+
+  .npc {
+    width: 80px;
+    height: 100px;
+    margin-left: -40px;
+    margin-top: -50px;
+  }
+  .npc-icon {
+    width: 64px;
+    height: 64px;
+    font-size: 30px;
+  }
+  .npc-name { font-size: 13px; }
+
+  .collectible {
+    width: 40px;
+    height: 40px;
+    margin-left: -20px;
+    margin-top: -20px;
+    font-size: 28px;
+  }
+
+  .chest {
+    width: 64px;
+    height: 64px;
+    margin-left: -32px;
+    margin-top: -32px;
+  }
+  .chest-icon { font-size: 44px; }
+
+  .waypoint {
+    width: 76px;
+    height: 96px;
+    margin-left: -38px;
+    margin-top: -48px;
+  }
+  .waypoint-icon {
+    width: 60px;
+    height: 60px;
+    font-size: 28px;
+  }
+}
+
+/* 手机竖屏：摇杆再大一点 */
+@media (hover: none) and (pointer: coarse) and (max-width: 640px) {
+  .virtual-joystick {
+    width: 130px;
+    height: 130px;
+  }
+  .joystick-stick {
+    width: 56px;
+    height: 56px;
+    margin-left: -28px;
+    margin-top: -28px;
+  }
+
+  .mobile-action-btn {
+    right: 18px;
+    bottom: 100px;
+    width: 76px;
+    height: 76px;
+  }
+  .mobile-action-btn .action-btn-label { font-size: 15px; }
+
+  .map-controls {
+    left: 12px;
+    bottom: 24px;
+  }
+}
+
+/* 平板横屏：给左右控件留足边距 */
+@media (hover: none) and (pointer: coarse) and (min-width: 641px) and (max-width: 1024px) and (orientation: landscape) {
+  .virtual-joystick {
+    width: 140px;
+    height: 140px;
+  }
+  .joystick-stick {
+    width: 60px;
+    height: 60px;
+    margin-left: -30px;
+    margin-top: -30px;
+  }
+
+  .mobile-action-btn {
+    right: 32px;
+    bottom: 42px;
+    width: 92px;
+    height: 92px;
+  }
+
+  .map-controls {
+    left: 28px;
+    bottom: 32px;
+  }
+}
