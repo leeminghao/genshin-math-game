@@ -635,6 +635,61 @@ try {
   })()`);
   await waitFor('window.__game.session.enemyStunned === true');
 
+  stage('情境动手题：点数取材与拖放分配');
+  // --- 1-2 tapCount 面积点数：点错触发反击，点对进入下一题 ---
+  await evaluate('window.__game.session.mapActive=false;window.__game.startLevel(1,2)');
+  await finishDialog();
+  await waitFor('document.querySelector(".screen.active")?.id === "battle-screen" && !!document.querySelector(".tapcount-grid")');
+  const tcCfg = await evaluate('window.__game.session.currentQuestions[0].interaction');
+  assert.equal(tcCfg.type, 'tapCount');
+  assert.ok(tcCfg.target >= 6 && tcCfg.target <= 20, '面积动手题数量应在可点范围');
+  assert.equal(await evaluate('document.querySelectorAll(".tapcount-cell").length'), tcCfg.rows * tcCfg.cols);
+  const hpBeforeTap = await evaluate('window.__game.state.player.hp');
+  await evaluate(`(() => {
+    [...document.querySelectorAll('.tapcount-cell')].slice(0, ${tcCfg.target - 1}).forEach(c => c.click());
+    document.querySelector('.interaction-confirm-bar .genshin-btn').click();
+  })()`);
+  await waitFor('window.__game.session.answered === false');
+  assert.ok(await evaluate('window.__game.state.player.hp') < hpBeforeTap, '点错数量应触发怪物反击');
+  await evaluate(`(() => {
+    [...document.querySelectorAll('.tapcount-cell')].forEach(c => c.click());
+    document.querySelector('.interaction-confirm-bar .genshin-btn').click();
+  })()`);
+  await waitFor('window.__game.session.currentQuestionIndex === 1', 15000);
+  report.tapCount = { target: tcCfg.target, passed: true };
+  // --- 1-3 dragSplit 平均分：分错判错，均分判对 ---
+  await evaluate('window.__game.startLevel(1,3)');
+  await finishDialog();
+  await waitFor('document.querySelector(".screen.active")?.id === "battle-screen"');
+  await evaluate(`(() => {
+    const q = window.__game.session.currentQuestions[0];
+    [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) === String(q.answer)).click();
+  })()`);
+  await waitFor('window.__game.session.currentQuestionIndex === 1 && !!document.querySelector(".dragsplit-pool")');
+  const dsCfg = await evaluate('window.__game.session.currentQuestions[1].interaction');
+  const perZone = Math.floor(dsCfg.total / dsCfg.zones);
+  assert.equal(dsCfg.type, 'dragSplit');
+  assert.equal(await evaluate('document.querySelectorAll(".dragsplit-item").length'), dsCfg.total);
+  // 全装进一辆矿车 → 判错
+  await evaluate(`(() => {
+    [...document.querySelectorAll('.dragsplit-item')].forEach(i => i.click());
+    document.querySelector('.interaction-confirm-bar .genshin-btn').click();
+  })()`);
+  await waitFor('window.__game.session.answered === false');
+  // 均匀分配 → 判对进入最后一题
+  await evaluate(`(() => {
+    const zones = [...document.querySelectorAll('.dragsplit-zone')];
+    const items = [...document.querySelectorAll('.dragsplit-item')];
+    const per = ${perZone};
+    items.forEach((item, i) => {
+      zones[Math.floor(i / per)].click();
+      item.click();
+    });
+    document.querySelector('.interaction-confirm-bar .genshin-btn').click();
+  })()`);
+  await waitFor('window.__game.session.currentQuestionIndex === 2', 15000);
+  report.dragSplit = { total: dsCfg.total, zones: dsCfg.zones, passed: true };
+
   stage('弹窗锁移动、损坏存档与旧存档迁移');
   await fresh();
   await evaluate('document.querySelector("#btn-map-settings").click()');

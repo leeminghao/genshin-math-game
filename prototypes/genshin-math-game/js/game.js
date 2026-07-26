@@ -4154,13 +4154,20 @@ window.addEventListener('unhandledrejection', function(e) {
 
     const area = $('#answer-area');
     area.innerHTML = '';
-    q.options.forEach(opt => {
-      const btn = document.createElement('button');
-      btn.className = 'answer-btn';
-      btn.textContent = opt;
-      btn.addEventListener('click', () => handleAnswer(opt, btn));
-      area.appendChild(btn);
-    });
+    session.currentInteraction = null;
+    if (q.interaction) {
+      area.classList.add('has-interaction');
+      renderBattleInteraction(q.interaction, area);
+    } else {
+      area.classList.remove('has-interaction');
+      q.options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'answer-btn';
+        btn.textContent = opt;
+        btn.addEventListener('click', () => handleAnswer(opt, btn));
+        area.appendChild(btn);
+      });
+    }
     $$('[data-hint-tier]').forEach(button => {
       const tier = Number(button.dataset.hintTier);
       button.classList.toggle('used', tier <= session.questionHintTiers[questionIndex]);
@@ -4220,12 +4227,189 @@ window.addEventListener('unhandledrejection', function(e) {
     }
   }
 
-  function handleAnswer(selected, btn) {
-    if (session.answered) return;
-    session.answered = true;
-    const questionIndex = session.currentQuestionIndex;
-    const q = session.currentQuestions[questionIndex];
-    const correct = selected == q.answer; // 允许数字和字符串比较
+  // ========== 情境动手题模板：把"算一道题"变成"动手做一件事" ==========
+  // tapCount 点数取材：点亮正确数量的物件（周长=点边、面积=点格）
+  // dragSplit 拖放分配：把 N 个物品平均分到 M 个区域（平均分/除法）
+  function renderBattleInteraction(cfg, container) {
+    if (cfg.type === 'tapCount') renderTapCount(cfg, container);
+    else if (cfg.type === 'dragSplit') renderDragSplit(cfg, container);
+  }
+
+  function makeInteractionConfirm(container, checkFn) {
+    const bar = document.createElement('div');
+    bar.className = 'interaction-confirm-bar';
+    const btn = document.createElement('button');
+    btn.className = 'genshin-btn primary';
+    btn.textContent = '确认，发起攻击！';
+    btn.addEventListener('click', () => {
+      if (session.answered) return;
+      const correct = checkFn();
+      bar.classList.add(correct ? 'confirm-correct' : 'confirm-wrong');
+      handleInteractionAnswer(correct);
+    });
+    bar.appendChild(btn);
+    container.appendChild(bar);
+    return btn;
+  }
+
+  function renderTapCount(cfg, container) {
+    const it = { type: 'tapCount', selected: new Set(), cfg };
+    session.currentInteraction = it;
+    const target = cfg.target;
+
+    const grid = document.createElement('div');
+    grid.className = 'tapcount-grid mode-' + (cfg.mode || 'fill');
+    grid.style.gridTemplateColumns = `repeat(${cfg.cols}, 1fr)`;
+
+    const cells = [];
+    for (let index = 0; index < cfg.rows * cfg.cols; index++) {
+      const cell = document.createElement('button');
+      cell.className = 'tapcount-cell';
+      cell.textContent = cfg.item;
+      cell.setAttribute('aria-label', `${cfg.itemName} ${index + 1}`);
+      cell.addEventListener('click', () => {
+        if (session.answered) return;
+        if (it.selected.has(index)) {
+          it.selected.delete(index);
+          cell.classList.remove('selected');
+        } else {
+          it.selected.add(index);
+          cell.classList.add('selected');
+          sfx('click');
+        }
+        counter.textContent = `已点亮 ${it.selected.size} / 需要 ${target}`;
+      });
+      grid.appendChild(cell);
+      cells.push(cell);
+    }
+
+    // 行标：点一下点亮整行（引导孩子发现"每行几个×几行"的乘法结构）
+    if (cfg.mode === 'fill' && cfg.rows > 1) {
+      const rowBar = document.createElement('div');
+      rowBar.className = 'tapcount-rows';
+      for (let r = 0; r < cfg.rows; r++) {
+        const rowBtn = document.createElement('button');
+        rowBtn.className = 'tapcount-row-btn';
+        rowBtn.textContent = `第 ${r + 1} 行全点亮`;
+        rowBtn.addEventListener('click', () => {
+          if (session.answered) return;
+          for (let c = 0; c < cfg.cols; c++) {
+            const index = r * cfg.cols + c;
+            it.selected.add(index);
+            cells[index].classList.add('selected');
+          }
+          sfx('click');
+          counter.textContent = `已点亮 ${it.selected.size} / 需要 ${target}`;
+        });
+        rowBar.appendChild(rowBtn);
+      }
+      container.appendChild(rowBar);
+    }
+
+    const counter = document.createElement('div');
+    counter.className = 'tapcount-counter';
+    counter.textContent = `已点亮 0 / 需要 ${target}`;
+
+    container.appendChild(grid);
+    container.appendChild(counter);
+    makeInteractionConfirm(container, () => it.selected.size === target);
+  }
+
+  function renderDragSplit(cfg, container) {
+    const zoneCount = cfg.zones;
+    const perZone = Math.floor(cfg.total / zoneCount);
+    const it = {
+      type: 'dragSplit',
+      remaining: cfg.total,
+      zones: Array.from({ length: zoneCount }, () => 0),
+      activeZone: 0,
+      cfg
+    };
+    session.currentInteraction = it;
+
+    const hint = document.createElement('div');
+    hint.className = 'dragsplit-hint';
+    hint.textContent = `先点一辆矿车选中它，再点岩核装进去。每辆矿车装一样多才公平！`;
+
+    const pool = document.createElement('div');
+    pool.className = 'dragsplit-pool';
+    const poolItems = [];
+    for (let index = 0; index < cfg.total; index++) {
+      const item = document.createElement('button');
+      item.className = 'dragsplit-item';
+      item.textContent = cfg.item;
+      item.addEventListener('click', () => {
+        if (session.answered || item.disabled) return;
+        item.disabled = true;
+        item.classList.add('placed');
+        it.remaining--;
+        it.zones[it.activeZone]++;
+        sfx('click');
+        refresh();
+      });
+      pool.appendChild(item);
+      poolItems.push(item);
+    }
+
+    const zoneBar = document.createElement('div');
+    zoneBar.className = 'dragsplit-zones';
+    const zoneEls = [];
+    for (let z = 0; z < zoneCount; z++) {
+      const zone = document.createElement('button');
+      zone.className = 'dragsplit-zone' + (z === 0 ? ' active' : '');
+      zone.dataset.zone = z;
+      zone.addEventListener('click', () => {
+        if (session.answered) return;
+        it.activeZone = z;
+        zoneEls.forEach((el, i) => el.classList.toggle('active', i === z));
+        refresh();
+      });
+      zoneBar.appendChild(zone);
+      zoneEls.push(zone);
+    }
+
+    function refresh() {
+      zoneEls.forEach((el, z) => {
+        el.innerHTML = `${cfg.zoneEmoji} ${cfg.zoneName} ${z + 1}<br><strong>${'●'.repeat(it.zones[z]) || '空'}</strong><br><span>${it.zones[z]} 块</span>`;
+      });
+      hint.textContent = it.remaining > 0
+        ? `还剩 ${it.remaining} 块岩核。点矿车切换，点岩核装入。`
+        : '全部装完了，检查一下每辆是不是一样多！';
+    }
+    refresh();
+
+    const undo = document.createElement('button');
+    undo.className = 'genshin-btn small dragsplit-undo';
+    undo.textContent = '↩️ 从当前矿车退回一块';
+    undo.addEventListener('click', () => {
+      if (session.answered || it.zones[it.activeZone] <= 0) return;
+      it.zones[it.activeZone]--;
+      it.remaining++;
+      const item = poolItems.find(el => el.disabled);
+      // 退回最近放置的一块（从后往前找）
+      for (let i = poolItems.length - 1; i >= 0; i--) {
+        if (poolItems[i].disabled) {
+          poolItems[i].disabled = false;
+          poolItems[i].classList.remove('placed');
+          break;
+        }
+      }
+      sfx('click');
+      refresh();
+    });
+
+    container.appendChild(hint);
+    container.appendChild(pool);
+    container.appendChild(zoneBar);
+    container.appendChild(undo);
+    makeInteractionConfirm(container, () => {
+      if (it.remaining > 0) return false;
+      return it.zones.every(count => count === perZone);
+    });
+  }
+
+  // 结算一次作答（选择题和动手题共用）：记录学习证据、结算战斗效果、推进题目
+  function resolveBattleAnswer(correct, questionIndex) {
     const priorAttempts = session.questionAttempts[questionIndex] || 0;
     const firstTry = priorAttempts === 0;
     const hintTier = session.questionHintTiers[questionIndex] || 0;
@@ -4246,12 +4430,7 @@ window.addEventListener('unhandledrejection', function(e) {
       hintTier
     });
 
-    // 禁用所有按钮
-    $$('.answer-btn').forEach(b => b.disabled = true);
-
     if (correct) {
-      sfx('correct');
-      btn.classList.add('correct');
       session.correctStreak++;
       state.player.answerStreak++;
       const damage = Math.ceil(session.enemyMaxHp / session.currentQuestions.length);
@@ -4301,8 +4480,6 @@ window.addEventListener('unhandledrejection', function(e) {
         setTimeout(() => $('#enemy-sprite').classList.remove('shake'), 400);
       }, 100);
     } else {
-      sfx('wrong');
-      btn.classList.add('wrong');
       const notes = [];
       if (hasPassive('streakGuard') && !session.streakGuardUsed) {
         // 连击守护：每关一次，答错不清零连击数
@@ -4364,6 +4541,27 @@ window.addEventListener('unhandledrejection', function(e) {
         renderBattleQuestion();
       }
     }, 900);
+  }
+
+  function handleAnswer(selected, btn) {
+    if (session.answered) return;
+    session.answered = true;
+    const questionIndex = session.currentQuestionIndex;
+    const q = session.currentQuestions[questionIndex];
+    const correct = selected == q.answer; // 允许数字和字符串比较
+    $$('.answer-btn').forEach(b => b.disabled = true);
+    if (correct) { sfx('correct'); btn.classList.add('correct'); }
+    else { sfx('wrong'); btn.classList.add('wrong'); }
+    resolveBattleAnswer(correct, questionIndex);
+  }
+
+  // 动手题确认：交互组件判定对错后走同一套结算
+  function handleInteractionAnswer(correct) {
+    if (session.answered) return;
+    session.answered = true;
+    const questionIndex = session.currentQuestionIndex;
+    if (correct) sfx('correct'); else sfx('wrong');
+    resolveBattleAnswer(correct, questionIndex);
   }
 
   function showDamage(amount) {

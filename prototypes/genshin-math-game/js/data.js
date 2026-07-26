@@ -1246,6 +1246,8 @@ const QUESTION_GENERATORS = {
     const p = (l + w) * 2;
     const thirdSide = randInt(Math.abs(l - w) + 1, l + w - 1);
     const trianglePerimeter = l + w + thirdSide;
+    // 动手题：沿正方形城墙边点城砖，体会"周长=边界累加"
+    const side = randInt(3, 4);
     return [
       {
         text: `一个长方形长 ${l} 米、宽 ${w} 米，周长是多少米？`,
@@ -1253,9 +1255,14 @@ const QUESTION_GENERATORS = {
         hint: `（长+宽）× 2 = (${l}+${w}) × 2 = ${p}。`
       },
       {
-        text: `正方形花坛边长 ${l} 米，周长是多少米？`,
-        options: genOptions(l * 4, 6, 1), answer: l * 4,
-        hint: `正方形周长 = 边长 × 4 = ${l} × 4 = ${l * 4}。`
+        text: `岩港的正方形城墙每边 ${side} 块城砖。沿着墙边点亮所有城砖，帮工匠数出周长！`,
+        options: genOptions(side * 4, 6, 1), answer: side * 4,
+        hint: `每条边 ${side} 块，4 条边：${side} × 4 = ${side * 4}。`,
+        interaction: {
+          type: 'tapCount', mode: 'fill',
+          item: '🧱', itemName: '城砖',
+          rows: 4, cols: side, target: side * 4
+        }
       },
       {
         text: `一个三角形三条边分别是 ${l}cm、${w}cm、${thirdSide}cm，周长是多少？`,
@@ -1266,25 +1273,30 @@ const QUESTION_GENERATORS = {
   },
   // 1-2 面积
   '1-2': () => {
-    const l = randInt(4, 8);
-    const w = randInt(3, 6);
+    const l = randInt(3, 5);
+    const w = randInt(2, 4);
     const a = l * w;
+    const lq = randInt(4, 8), wq = randInt(3, 6);
     return [
       {
-        text: `一个长方形长 ${l}cm、宽 ${w}cm，用 1cm² 的小正方形铺满，需要几个？`,
-        visual: { type: 'grid', rows: w, cols: l, emoji: '⬜' },
+        text: `岩甲巨像召唤了 ${w} 行 ${l} 列的石板护住胸口！点亮所有石板，数清楚它用了多少块。`,
         options: genOptions(a, 6, 1), answer: a,
-        hint: `每行 ${l} 个，${w} 行：${l} × ${w} = ${a}。`
+        hint: `每行 ${l} 块，${w} 行：${l} × ${w} = ${a}。可以逐块点，也可以点行标一次点整行。`,
+        interaction: {
+          type: 'tapCount', mode: 'fill',
+          item: '🟫', itemName: '石板',
+          rows: w, cols: l, target: a
+        }
       },
       {
-        text: `正方形边长 ${l}cm，面积是多少？`,
-        options: genOptions(l * l, 8, 1), answer: l * l,
-        hint: `正方形面积 = 边长 × 边长 = ${l} × ${l} = ${l * l}。`
+        text: `正方形边长 ${lq}cm，面积是多少？`,
+        options: genOptions(lq * lq, 8, 1), answer: lq * lq,
+        hint: `正方形面积 = 边长 × 边长 = ${lq} × ${lq} = ${lq * lq}。`
       },
       {
-        text: `长方形菜地长 ${l + 2} 米、宽 ${w} 米，面积是多少平方米？`,
-        options: genOptions((l + 2) * w, 8, 1), answer: (l + 2) * w,
-        hint: `${l + 2} × ${w} = ${(l + 2) * w}。`
+        text: `长方形菜地长 ${lq} 米、宽 ${wq} 米，面积是多少平方米？`,
+        options: genOptions(lq * wq, 8, 1), answer: lq * wq,
+        hint: `${lq} × ${wq} = ${lq * wq}。`
       }
     ];
   },
@@ -1293,6 +1305,9 @@ const QUESTION_GENERATORS = {
     const a1 = randInt(3, 6), a2 = randInt(2, 5);
     const b1 = randInt(2, 4), b2 = randInt(2, 4);
     const total = a1 * b1 + a2 * b2;
+    // 动手题：岩核平均装进矿车，体会"平均分"
+    const carts = randInt(2, 3);
+    const perCart = randInt(3, 5);
     return [
       {
         text: `一个 L 形图形割成两个长方形：${a1}×${b1} 和 ${a2}×${b2}，面积是多少？`,
@@ -1300,9 +1315,15 @@ const QUESTION_GENERATORS = {
         hint: `${a1}×${b1} + ${a2}×${b2} = ${a1 * b1} + ${a2 * b2} = ${total}。`
       },
       {
-        text: `平行四边形割补后变成长方形。底 ${a1 + 3}cm、高 ${b1 + 2}cm 的平行四边形面积是多少？`,
-        options: genOptions((a1 + 3) * (b1 + 2), 8, 1), answer: (a1 + 3) * (b1 + 2),
-        hint: `底 × 高 = ${a1 + 3} × ${b1 + 2} = ${(a1 + 3) * (b1 + 2)}。`
+        text: `巨像掉落 ${carts * perCart} 块岩核！把它们平均装进 ${carts} 辆矿车运走，每辆装几块？`,
+        options: genOptions(perCart, 4, 1), answer: perCart,
+        hint: `${carts * perCart} ÷ ${carts} = ${perCart}。每辆矿车装一样多才公平。`,
+        interaction: {
+          type: 'dragSplit',
+          item: '🪨', itemName: '岩核',
+          zoneName: '矿车', zoneEmoji: '🛒',
+          total: carts * perCart, zones: carts
+        }
       },
       {
         text: `一个不规则图形经过割补，正好拼成一个边长 ${a1}cm 的正方形。原图形面积是多少？`,

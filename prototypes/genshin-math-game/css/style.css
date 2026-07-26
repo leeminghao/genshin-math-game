@@ -4177,3 +4177,138 @@ html.reduced-motion *::after {
   100% { opacity: 0; transform: translateX(-50%) translateY(-14px); }
 }
 .enemy-sprite.stunned { filter: grayscale(0.5) brightness(0.8); }
+
+
+/* ========== 情境动手题模板 ========== */
+.answer-area.has-interaction {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* tapCount 点数取材 */
+.tapcount-grid {
+  display: grid;
+  gap: 6px;
+  justify-content: center;
+  max-width: 420px;
+  margin: 0 auto;
+}
+.tapcount-cell {
+  width: 52px; height: 52px;
+  font-size: 26px;
+  border: 2px solid rgba(232,212,154,0.35);
+  border-radius: 10px;
+  background: rgba(17,24,39,0.6);
+  cursor: pointer;
+  transition: transform 0.1s, background 0.15s, border-color 0.15s;
+  touch-action: manipulation;
+}
+.tapcount-cell:hover { transform: scale(1.06); }
+.tapcount-cell.selected {
+  background: rgba(116,194,168,0.3);
+  border-color: var(--element-anemo);
+  box-shadow: 0 0 12px rgba(116,194,168,0.55);
+  transform: scale(1.08);
+}
+.tapcount-rows {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tapcount-row-btn {
+  padding: 6px 12px;
+  border: 1px dashed rgba(232,212,154,0.5);
+  border-radius: 999px;
+  background: rgba(232,212,154,0.08);
+  color: var(--gold-light);
+  font-size: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.tapcount-row-btn:hover { background: rgba(232,212,154,0.18); }
+.tapcount-counter {
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gold-light);
+}
+
+/* dragSplit 拖放分配 */
+.dragsplit-hint {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.dragsplit-pool {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.25);
+  max-width: 460px;
+  margin: 0 auto;
+}
+.dragsplit-item {
+  width: 46px; height: 46px;
+  font-size: 24px;
+  border: 2px solid rgba(232,212,154,0.35);
+  border-radius: 50%;
+  background: rgba(17,24,39,0.6);
+  cursor: pointer;
+  transition: transform 0.1s, opacity 0.15s;
+  touch-action: manipulation;
+}
+.dragsplit-item:hover { transform: scale(1.1); }
+.dragsplit-item.placed {
+  opacity: 0.2;
+  transform: scale(0.9);
+}
+.dragsplit-zones {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.dragsplit-zone {
+  min-width: 110px;
+  padding: 12px 14px;
+  border: 2px dashed rgba(232,212,154,0.45);
+  border-radius: 14px;
+  background: rgba(17,24,39,0.55);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.7;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  touch-action: manipulation;
+}
+.dragsplit-zone.active {
+  border-style: solid;
+  border-color: var(--element-anemo);
+  background: rgba(116,194,168,0.12);
+  box-shadow: 0 0 12px rgba(116,194,168,0.4);
+}
+.dragsplit-zone strong { color: var(--element-anemo); letter-spacing: 2px; }
+.dragsplit-zone span { font-size: 12px; color: var(--text-dim); }
+.dragsplit-undo {
+  align-self: center;
+}
+
+/* 确认按钮 */
+.interaction-confirm-bar {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+}
+.interaction-confirm-bar.confirm-correct .genshin-btn {
+  border-color: var(--success);
+  box-shadow: 0 0 18px rgba(126,231,135,0.5);
+}
+.interaction-confirm-bar.confirm-wrong .genshin-btn {
+  border-color: var(--danger);
+  box-shadow: 0 0 18px rgba(255,107,107,0.5);
+}
