@@ -1061,37 +1061,53 @@ window.addEventListener('unhandledrejection', function(e) {
         session.joystick.active = dist > 2;
       }
 
-      function onPointerDown(event) {
+      function startJoystick(clientX, clientY) {
         if (!session.mapActive || session.controlsLocked) return;
-        event.preventDefault();
-        event.stopPropagation();
         dragging = true;
-        currentPointerId = event.pointerId;
         // 开始使用摇杆时，立即取消之前的点击目标，防止摇杆和自动寻路冲突
         session.targetX = session.playerX;
         session.targetY = session.playerY;
         session.isMoving = false;
         session.moveMode = null;
-        try { joystick.setPointerCapture(event.pointerId); } catch (e) {}
         const rect = joystick.getBoundingClientRect();
         centerX = rect.left + rect.width / 2;
         centerY = rect.top + rect.height / 2;
         joystick.classList.add('active');
-        updateStick(event.clientX, event.clientY);
+        updateStick(clientX, clientY);
+      }
+
+      function moveJoystick(clientX, clientY) {
+        if (!dragging) return;
+        updateStick(clientX, clientY);
+      }
+
+      function endJoystick() {
+        if (!dragging) return;
+        resetStick();
+      }
+
+      // Pointer Events（现代浏览器主路径）
+      function onPointerDown(event) {
+        if (!session.mapActive || session.controlsLocked) return;
+        event.preventDefault();
+        event.stopPropagation();
+        currentPointerId = event.pointerId;
+        try { joystick.setPointerCapture(event.pointerId); } catch (e) {}
+        startJoystick(event.clientX, event.clientY);
       }
 
       function onPointerMove(event) {
         if (!dragging || event.pointerId !== currentPointerId) return;
         event.preventDefault();
         event.stopPropagation();
-        updateStick(event.clientX, event.clientY);
+        moveJoystick(event.clientX, event.clientY);
       }
 
       function onPointerUp(event) {
         if (!dragging || event.pointerId !== currentPointerId) return;
         event.preventDefault();
         event.stopPropagation();
-        resetStick();
+        endJoystick();
       }
 
       joystick.addEventListener('pointerdown', onPointerDown);
@@ -1103,26 +1119,45 @@ window.addEventListener('unhandledrejection', function(e) {
       // 安全网：某些浏览器 pointer capture 丢失后没有正确触发 pointerup，
       // 在 window 层面再监听一次同 id 的 pointerup。
       window.addEventListener('pointerup', event => {
-        if (dragging && event.pointerId === currentPointerId) resetStick();
+        if (dragging && event.pointerId === currentPointerId) endJoystick();
       }, { passive: false });
       window.addEventListener('pointercancel', event => {
-        if (dragging && event.pointerId === currentPointerId) resetStick();
+        if (dragging && event.pointerId === currentPointerId) endJoystick();
       }, { passive: false });
 
-      // 兜底：阻止 touch 事件冒泡到地图（兼容部分 Android 浏览器的 passive 处理）
+      // Touch Events 兜底（兼容旧版 Safari 或 pointer events 异常时）
       joystick.addEventListener('touchstart', event => {
+        if (!session.mapActive || session.controlsLocked) return;
         event.preventDefault();
         event.stopPropagation();
+        if (event.touches.length > 0) {
+          const t = event.touches[0];
+          currentPointerId = 'touch-' + t.identifier;
+          startJoystick(t.clientX, t.clientY);
+        }
       }, { passive: false });
+
       joystick.addEventListener('touchmove', event => {
+        if (!dragging) return;
         event.preventDefault();
         event.stopPropagation();
+        const t = event.changedTouches[0];
+        if (t && currentPointerId === 'touch-' + t.identifier) {
+          moveJoystick(t.clientX, t.clientY);
+        }
       }, { passive: false });
-      joystick.addEventListener('touchend', event => {
+
+      function onTouchEnd(event) {
+        if (!dragging) return;
         event.preventDefault();
         event.stopPropagation();
-        resetStick();
-      }, { passive: false });
+        const t = event.changedTouches[0];
+        if (!t || currentPointerId === 'touch-' + t.identifier) {
+          endJoystick();
+        }
+      }
+      joystick.addEventListener('touchend', onTouchEnd, { passive: false });
+      joystick.addEventListener('touchcancel', onTouchEnd, { passive: false });
     })();
 
     // 移动端交互按钮：靠近可交互目标时高亮，点击触发对应操作
