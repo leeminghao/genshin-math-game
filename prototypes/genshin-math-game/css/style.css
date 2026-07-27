@@ -4312,3 +4312,180 @@ html.reduced-motion *::after {
   border-color: var(--danger);
   box-shadow: 0 0 18px rgba(255,107,107,0.5);
 }
+
+
+/* ========== 材料收集 ========== */
+.material {
+  position: absolute;
+  width: 36px; height: 36px;
+  margin-left: -18px; margin-top: -18px;
+  font-size: 26px;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 3;
+  pointer-events: none;
+  animation: material-float 2.4s ease-in-out infinite;
+  filter: drop-shadow(0 0 6px rgba(116,194,168,0.7));
+}
+@keyframes material-float {
+  0%, 100% { transform: translateY(0) rotate(-6deg); }
+  50% { transform: translateY(-8px) rotate(6deg); }
+}
+.material.collected { display: none; }
+
+/* ========== 填充式机关面板 ========== */
+.mechanism-panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 24px;
+  z-index: 60;
+  background: linear-gradient(0deg, rgba(5,10,16,0.55), transparent 60%);
+}
+.mechanism-panel.hidden { display: none; }
+.mechanism-card {
+  width: min(400px, calc(100vw - 32px));
+  background: linear-gradient(180deg, rgba(45,58,79,0.98), rgba(17,24,39,0.99));
+  border: 2px solid var(--gold);
+  border-radius: 20px;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  animation: mechanism-rise 0.3s ease-out;
+}
+@keyframes mechanism-rise {
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.mechanism-title {
+  font-size: 20px; font-weight: 800;
+  color: var(--gold-light);
+  margin-bottom: 8px;
+}
+.mechanism-visual {
+  position: relative;
+  height: 110px;
+  margin-bottom: 8px;
+}
+.mech-windmill-tower { font-size: 64px; line-height: 110px; }
+.mech-windmill-blades {
+  position: absolute;
+  top: 6px; left: 50%;
+  transform: translateX(-50%);
+  font-size: 44px;
+  color: var(--element-anemo);
+  text-shadow: 0 0 14px rgba(116,194,168,0.8);
+}
+.mech-windmill-blades.spinning {
+  animation: blades-spin 0.8s linear infinite;
+}
+@keyframes blades-spin {
+  100% { transform: translateX(-50%) rotate(360deg); }
+}
+.mech-windmill-blades.wobble {
+  animation: blades-wobble 0.5s ease-in-out;
+}
+@keyframes blades-wobble {
+  0%, 100% { transform: translateX(-50%) rotate(0); }
+  25% { transform: translateX(-50%) rotate(25deg); }
+  75% { transform: translateX(-50%) rotate(-20deg); }
+}
+
+/* 估算阶段 */
+.estimate-prompt {
+  font-size: 18px; font-weight: 700;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+.estimate-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.estimate-stepper button {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  border: 2px solid var(--gold-dark);
+  background: rgba(232,212,154,0.12);
+  color: var(--gold-light);
+  font-size: 26px; font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.estimate-stepper button:active { transform: scale(0.92); }
+.estimate-stepper span {
+  min-width: 64px;
+  font-size: 40px; font-weight: 900;
+  color: var(--gold-light);
+}
+
+/* 投放阶段 */
+.mech-slots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.mech-slot {
+  width: 46px; height: 46px;
+  border-radius: 50%;
+  border: 2px dashed rgba(116,194,168,0.5);
+  background: rgba(17,24,39,0.6);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  transition: background 0.2s, border-color 0.2s;
+}
+.mech-slot.filled {
+  border-style: solid;
+  border-color: var(--element-anemo);
+  background: rgba(116,194,168,0.2);
+}
+.mech-slot.empty-glow {
+  border-color: var(--danger);
+  animation: slot-glow 0.8s infinite;
+}
+@keyframes slot-glow {
+  0%, 100% { box-shadow: 0 0 4px rgba(255,107,107,0.4); }
+  50% { box-shadow: 0 0 16px rgba(255,107,107,0.9); }
+}
+.mech-feedback {
+  min-height: 24px;
+  font-size: 15px; font-weight: 700;
+  color: var(--gold-light);
+  margin-bottom: 10px;
+}
+.mech-feedback.warn { color: var(--danger); }
+.mech-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.mech-inventory {
+  font-size: 16px; font-weight: 700;
+  color: var(--element-anemo);
+}
+
+/* 符号定格 */
+.mech-symbol-freeze {
+  position: absolute;
+  top: 18px; right: 18px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(11,15,23,0.85);
+  border: 1px solid var(--gold);
+  color: var(--gold-light);
+  font-size: 20px; font-weight: 900;
+  animation: symbol-pop 0.5s ease-out;
+  pointer-events: none;
+}
+@keyframes symbol-pop {
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}

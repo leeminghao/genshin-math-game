@@ -60,6 +60,24 @@ window.addEventListener('unhandledrejection', function(e) {
     { id: 'scroll', name: '智慧卷轴', emoji: '📜', cost: 25, desc: '战斗中免费查看当前题的完整提示' }
   ];
 
+  // 填充式机关：地图上的数学实体。收集材料 → 估算数量 → 投放 → 物理反馈（不够/正好/多了）→ 符号定格
+  const MECHANISMS = {
+    windmill: {
+      id: 'windmill',
+      levelId: '0-0',
+      elementId: 'windmill-change',
+      x: 1640, y: 2420, radius: 130,
+      title: '沉睡的风车',
+      material: 'windSeed',
+      itemEmoji: '🍃', slotEmoji: '🌀',
+      need: 6,
+      restored: () => state.map.worldChanges.windmillRestored,
+      restoreText: '风车转得正欢！去别处冒险吧',
+      symbols: ['🍃×6 → 🌀×6', '一一对应！'],
+      applyWorldChange: () => { state.map.worldChanges.windmillRestored = true; }
+    }
+  };
+
   // 每日/每周任务题库：metric 对应 recordQuestProgress 的埋点，mode 为 'max' 时进度取历史最大值
   const QUEST_POOLS = {
     daily: [
@@ -146,6 +164,7 @@ window.addEventListener('unhandledrejection', function(e) {
       activatedWaypoints: [],
       seenStories: [],
       discoveredAreas: [],
+      collectedMaterials: [],
       worldChanges: {
         windmillRestored: false,
         bridgeOpened: false,
@@ -204,6 +223,10 @@ window.addEventListener('unhandledrejection', function(e) {
     },
     equipment: {
       weapon: 'wooden'
+    },
+    // 收集材料：机关的运算对象（风种修风车、石料砌城墙……）
+    materials: {
+      windSeed: 0
     }
   };
 
@@ -345,7 +368,10 @@ window.addEventListener('unhandledrejection', function(e) {
     // 武器/道具战斗内状态
     weaponStrikeUsed: false,   // 武器技能每场战斗一次
     itemShield: false,         // 护盾符文：抵挡一次怪物攻击
-    enemyStunned: false        // 弱点破防/武器震慑：怪物下一次攻击无效
+    enemyStunned: false,       // 弱点破防/武器震慑：怪物下一次攻击无效
+    // 填充式机关会话状态（不持久化）
+    currentMechanism: null,
+    mechanism: null            // { id, estimate, filled, failCount, resolved }
   };
 
   function readEventLog() {
@@ -564,6 +590,7 @@ window.addEventListener('unhandledrejection', function(e) {
     );
     normalized.map.seenStories = uniqueValues(rawMap.seenStories, value => validStoryIds.has(value));
     normalized.map.discoveredAreas = uniqueValues(rawMap.discoveredAreas, value => validAreaIds.has(value));
+    normalized.map.collectedMaterials = uniqueValues(rawMap.collectedMaterials, Number.isInteger).filter(value => value >= 0);
     const rawWorldChanges = isPlainObject(rawMap.worldChanges) ? rawMap.worldChanges : {};
     // 兼容 v2.x 存档：已经完成对应挑战的玩家不应在升级后看到世界倒退。
     normalized.map.worldChanges.windmillRestored = rawWorldChanges.windmillRestored === true
@@ -607,6 +634,12 @@ window.addEventListener('unhandledrejection', function(e) {
     });
     normalized.equipment.weapon = normalized.inventory.weapons.includes(rawEquipment.weapon)
       ? rawEquipment.weapon : 'wooden';
+
+    // 材料：旧存档缺省时给 0，损坏字段丢弃
+    const rawMaterials = isPlainObject(rawState.materials) ? rawState.materials : {};
+    Object.keys(normalized.materials).forEach(id => {
+      normalized.materials[id] = Math.floor(finiteNumber(rawMaterials[id], 0, 0, 99));
+    });
     return normalized;
   }
 
@@ -698,7 +731,9 @@ window.addEventListener('unhandledrejection', function(e) {
       reviveUsed: false,
       weaponStrikeUsed: false,
       itemShield: false,
-      enemyStunned: false
+      enemyStunned: false,
+      currentMechanism: null,
+      mechanism: null
     });
   }
 
@@ -709,9 +744,10 @@ window.addEventListener('unhandledrejection', function(e) {
     saveGame();
     $$('.collectible').forEach(item => item.classList.remove('collected'));
     $$('.chest').forEach(chest => chest.classList.remove('opened'));
+    $$('.material').forEach(item => item.classList.remove('collected'));
     $$('.hidden-area').forEach(area => area.classList.remove('discovered'));
     $$('.story-trigger').forEach(trigger => { trigger.dataset.triggered = 'false'; });
-    ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal', 'shop-modal'].forEach(id => {
+    ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal', 'shop-modal', 'mechanism-panel'].forEach(id => {
       $('#' + id)?.classList.add('hidden');
     });
     updateMapHud();
@@ -742,7 +778,7 @@ window.addEventListener('unhandledrejection', function(e) {
   }
 
   function syncControlsLock() {
-    const overlayIds = ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal', 'shop-modal'];
+    const overlayIds = ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal', 'shop-modal', 'mechanism-panel'];
     session.controlsLocked = overlayIds.some(id => !$('#' + id)?.classList.contains('hidden'));
     if (session.controlsLocked) stopMapMovement();
   }
@@ -889,6 +925,12 @@ window.addEventListener('unhandledrejection', function(e) {
   }
 
   // 事件绑定
+  function focusWorldMap() {
+    const mapScreen = $('#world-map');
+    if (!mapScreen) return;
+    try { mapScreen.focus({ preventScroll: true }); } catch (e) { mapScreen.focus(); }
+  }
+
   function bindEvents() {
     document.body.addEventListener('pointerdown', ensureAudioReady, { once: true });
     $('#btn-start').addEventListener('click', () => {
@@ -980,12 +1022,6 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#btn-battle-exit').addEventListener('click', () => leaveChallenge('battle'));
 
     // 开放世界：点击地图移动（兼容触屏）
-    function focusWorldMap() {
-      const mapScreen = $('#world-map');
-      if (!mapScreen) return;
-      try { mapScreen.focus({ preventScroll: true }); } catch (e) { mapScreen.focus(); }
-    }
-
     function handleMapClick(e) {
       if (!session.mapActive || session.controlsLocked) return;
       if (e.target.closest('.landmark, .waypoint, .npc, .map-header, .region-enter-prompt, .virtual-joystick, .mobile-action-btn, .map-controls')) return;
@@ -1032,6 +1068,9 @@ window.addEventListener('unhandledrejection', function(e) {
         if (!session.enterPromptHidden && session.currentLandmark !== null) {
           e.preventDefault();
           tryEnterRegion(session.currentLandmark);
+        } else if (session.currentMechanism) {
+          e.preventDefault();
+          openMechanism(session.currentMechanism);
         }
       }
     });
@@ -1325,6 +1364,31 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#use-potion-btn')?.addEventListener('click', () => useConsumable('potion'));
     $('#use-shield-btn')?.addEventListener('click', () => useConsumable('shield'));
     $('#use-scroll-btn')?.addEventListener('click', () => useConsumable('scroll'));
+
+    // 填充式机关：面板按钮与风车实体点击
+    $('#estimate-minus')?.addEventListener('click', () => {
+      const m = session.mechanism;
+      if (!m) return;
+      m.estimateValue = Math.max(1, (m.estimateValue || 5) - 1);
+      $('#estimate-value').textContent = String(m.estimateValue);
+      sfx('click');
+    });
+    $('#estimate-plus')?.addEventListener('click', () => {
+      const m = session.mechanism;
+      if (!m) return;
+      m.estimateValue = Math.min(20, (m.estimateValue || 5) + 1);
+      $('#estimate-value').textContent = String(m.estimateValue);
+      sfx('click');
+    });
+    $('#btn-estimate-commit')?.addEventListener('click', commitEstimate);
+    $('#btn-mech-place')?.addEventListener('click', placeMaterial);
+    $('#btn-mech-take')?.addEventListener('click', takeMaterial);
+    $('#btn-mech-verify')?.addEventListener('click', verifyMechanism);
+    $('#btn-mechanism-close')?.addEventListener('click', closeMechanism);
+    $('#windmill-change')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (session.currentMechanism === 'windmill') openMechanism('windmill');
+    });
   }
 
   // 设置
@@ -1719,6 +1783,7 @@ window.addEventListener('unhandledrejection', function(e) {
   function updateMapHud() {
     if ($('#mini-level')) $('#mini-level').textContent = state.player.level;
     if ($('#mini-gems')) $('#mini-gems').textContent = state.player.gems;
+    if ($('#mini-seeds')) $('#mini-seeds').textContent = state.materials?.windSeed || 0;
   }
 
   function addExperience(amount) {
@@ -2029,6 +2094,10 @@ window.addEventListener('unhandledrejection', function(e) {
         $$('.chest').forEach((chest, idx) => {
           chest.classList.toggle('opened', session.openedChests.includes(idx));
         });
+        const collectedMaterials = Array.isArray(state.map?.collectedMaterials) ? state.map.collectedMaterials : [];
+        $$('.material').forEach((item, idx) => {
+          item.classList.toggle('collected', collectedMaterials.includes(idx));
+        });
         const discoveredAreas = Array.isArray(state.map?.discoveredAreas) ? state.map.discoveredAreas : [];
         $$('.hidden-area').forEach(area => {
           area.classList.toggle('discovered', discoveredAreas.includes(area.dataset.area));
@@ -2275,6 +2344,8 @@ window.addEventListener('unhandledrejection', function(e) {
         try { checkHiddenAreas(); } catch (e) { console.warn('checkHiddenAreas error', e); }
         try { checkStoryTriggers(); } catch (e) { console.warn('checkStoryTriggers error', e); }
         try { checkRegionDiscovery(); } catch (e) { console.warn('checkRegionDiscovery error', e); }
+        try { checkMaterials(); } catch (e) { console.warn('checkMaterials error', e); }
+        try { checkMechanismProximity(); } catch (e) { console.warn('checkMechanismProximity error', e); }
         try { updateMobileActionButton(); } catch (e) { console.warn('updateMobileActionButton error', e); }
       }
       try { updateCompass(); } catch (e) { console.warn('updateCompass error', e); }
@@ -2556,6 +2627,12 @@ window.addEventListener('unhandledrejection', function(e) {
       if (dist < 90) candidates.push({ type: 'npc', id: npcId, dist, label: '对话' });
     });
 
+    Object.values(MECHANISMS).forEach(mech => {
+      if (mech.restored()) return;
+      const dist = Math.hypot(session.playerX - mech.x, session.playerY - mech.y);
+      if (dist < mech.radius) candidates.push({ type: 'mechanism', id: mech.id, dist, label: '修复' });
+    });
+
     const target = candidates.sort((a, b) => a.dist - b.dist)[0] || null;
     if (target) {
       btn.classList.remove('hidden');
@@ -2582,7 +2659,268 @@ window.addEventListener('unhandledrejection', function(e) {
       }
     } else if (target.type === 'npc') {
       startNpcDialog(target.id);
+    } else if (target.type === 'mechanism') {
+      openMechanism(target.id);
     }
+  }
+
+  // ========== 材料收集 ==========
+  function checkMaterials() {
+    $$('.material').forEach((item, idx) => {
+      if (state.map.collectedMaterials.includes(idx)) return;
+      const mx = parseInt(item.style.left);
+      const my = parseInt(item.style.top);
+      if (Math.hypot(session.playerX - mx, session.playerY - my) >= 42) return;
+      const kind = item.dataset.material || 'windSeed';
+      state.map.collectedMaterials.push(idx);
+      state.materials[kind] = (state.materials[kind] || 0) + 1;
+      item.classList.add('collected');
+      sfx('collect');
+      saveGame();
+      updateMapHud();
+      trackEvent('material_collect', { kind, total: state.materials[kind] });
+    });
+  }
+
+  // ========== 填充式机关 ==========
+  function checkMechanismProximity() {
+    let nearest = null;
+    let nearestDist = Infinity;
+    Object.values(MECHANISMS).forEach(mech => {
+      const dist = Math.hypot(session.playerX - mech.x, session.playerY - mech.y);
+      if (dist < mech.radius && dist < nearestDist) {
+        nearest = mech.id;
+        nearestDist = dist;
+      }
+    });
+    session.currentMechanism = nearest;
+  }
+
+  function openMechanism(id) {
+    const mech = MECHANISMS[id];
+    if (!mech) return;
+    if (!session.mechanism || session.mechanism.id !== id) {
+      session.mechanism = { id, estimate: null, filled: 0, failCount: 0, resolved: false };
+    }
+    if (mech.restored()) {
+      session.mechanism.resolved = true;
+    }
+    stopMapMovement();
+    renderMechanism();
+    $('#mechanism-panel').classList.remove('hidden');
+    syncControlsLock();
+    trackEvent('mechanism_open', { id });
+  }
+
+  function closeMechanism() {
+    $('#mechanism-panel').classList.add('hidden');
+    syncControlsLock();
+    focusWorldMap();
+  }
+
+  function renderMechanism() {
+    const mech = MECHANISMS[session.mechanism?.id];
+    if (!mech) return;
+    const m = session.mechanism;
+    const blades = $('#mech-blades');
+    blades.classList.toggle('spinning', mech.restored());
+    $('#mechanism-title').textContent = mech.restored() ? '转动的风车' : mech.title;
+    $('#mech-symbol-freeze').classList.add('hidden');
+
+    if (mech.restored()) {
+      $('#mechanism-estimate').classList.add('hidden');
+      $('#mechanism-fill').classList.remove('hidden');
+      $('#mech-slots').innerHTML = '';
+      $('#mech-feedback').className = 'mech-feedback';
+      $('#mech-feedback').textContent = mech.restoreText;
+      $('#mech-inventory').textContent = `${mech.itemEmoji} × ${state.materials[mech.material] || 0}`;
+      $('#btn-mech-place').disabled = true;
+      $('#btn-mech-take').disabled = true;
+      $('#btn-mech-verify').disabled = true;
+      return;
+    }
+
+    $('#btn-mech-place').disabled = false;
+    $('#btn-mech-take').disabled = false;
+    $('#btn-mech-verify').disabled = false;
+    if (m.estimate === null) {
+      // 估算阶段：让孩子自己写下一个数，建立承诺感
+      $('#mechanism-estimate').classList.remove('hidden');
+      $('#mechanism-fill').classList.add('hidden');
+      $('#estimate-value').textContent = '5';
+      m.estimateValue = 5;
+    } else {
+      $('#mechanism-estimate').classList.add('hidden');
+      $('#mechanism-fill').classList.remove('hidden');
+      renderMechSlots(mech, m);
+    }
+  }
+
+  function renderMechSlots(mech, m, feedback) {
+    const slotsEl = $('#mech-slots');
+    slotsEl.innerHTML = '';
+    const total = Math.max(mech.need, m.filled);
+    for (let i = 0; i < total; i++) {
+      const slot = document.createElement('div');
+      const filled = i < m.filled;
+      slot.className = 'mech-slot' + (filled ? ' filled' : '');
+      if (!filled && feedback === 'short') slot.classList.add('empty-glow');
+      slot.textContent = filled ? mech.itemEmoji : mech.slotEmoji;
+      slotsEl.appendChild(slot);
+    }
+    const inv = state.materials[mech.material] || 0;
+    $('#mech-inventory').textContent = `${mech.itemEmoji} × ${inv}`;
+    const fb = $('#mech-feedback');
+    fb.className = 'mech-feedback';
+    if (feedback === 'short') {
+      fb.classList.add('warn');
+      fb.textContent = `还差 ${mech.need - m.filled} 颗！去收集`;
+    } else if (feedback === 'over') {
+      fb.classList.add('warn');
+      fb.textContent = '太多了！取回几颗';
+    } else {
+      fb.textContent = `${m.filled} / ${mech.need}`;
+    }
+    $('#btn-mech-take').disabled = m.filled <= 0;
+    $('#btn-mech-place').disabled = inv <= 0;
+  }
+
+  function commitEstimate() {
+    const mech = MECHANISMS[session.mechanism?.id];
+    const m = session.mechanism;
+    if (!mech || !m || m.estimate !== null) return;
+    m.estimate = m.estimateValue || 5;
+    sfx('click');
+    trackEvent('mechanism_estimate', { id: mech.id, estimate: m.estimate, need: mech.need });
+    renderMechanism();
+    showHint(m.estimate === mech.need ? '先猜再想，很好！放进去验证吧' : '猜完啦？放进去验证吧');
+  }
+
+  function placeMaterial() {
+    const mech = MECHANISMS[session.mechanism?.id];
+    const m = session.mechanism;
+    if (!mech || !m || m.resolved || mech.restored()) return;
+    const inv = state.materials[mech.material] || 0;
+    if (inv <= 0 || m.filled >= mech.need + 3) return;
+    state.materials[mech.material] = inv - 1;
+    m.filled++;
+    sfx('click');
+    renderMechSlots(mech, m);
+    updateMapHud();
+    saveGame();
+  }
+
+  function takeMaterial() {
+    const mech = MECHANISMS[session.mechanism?.id];
+    const m = session.mechanism;
+    if (!mech || !m || m.resolved || m.filled <= 0 || mech.restored()) return;
+    m.filled--;
+    state.materials[mech.material] = (state.materials[mech.material] || 0) + 1;
+    sfx('click');
+    renderMechSlots(mech, m);
+    updateMapHud();
+    saveGame();
+  }
+
+  // 孩子主动检验：风车启动，物理反馈"不够/正好/太多"
+  function verifyMechanism() {
+    const mech = MECHANISMS[session.mechanism?.id];
+    const m = session.mechanism;
+    if (!mech || !m || m.resolved || mech.restored()) return;
+    if (m.filled === mech.need) {
+      updateMapHud();
+      saveGame();
+      resolveMechanismSuccess(mech, m);
+      return;
+    }
+    m.failCount++;
+    sfx('wrong');
+    const blades = $('#mech-blades');
+    blades.classList.remove('wobble');
+    void blades.offsetWidth;
+    blades.classList.add('wobble');
+    const short = m.filled < mech.need;
+    renderMechSlots(mech, m, short ? 'short' : 'over');
+    trackEvent(short ? 'mechanism_short' : 'mechanism_over', { id: mech.id, filled: m.filled, need: mech.need });
+  }
+
+  // 成功：叶片转动 + 符号定格 + 估算对照，然后走关卡完成链路
+  function resolveMechanismSuccess(mech, m) {
+    if (m.resolved) return;
+    m.resolved = true;
+    sfx('win');
+    renderMechSlots(mech, m);
+    const blades = $('#mech-blades');
+    blades.classList.add('spinning');
+    const freeze = $('#mech-symbol-freeze');
+    freeze.innerHTML = mech.symbols.join('<br>');
+    freeze.classList.remove('hidden');
+    trackEvent('mechanism_success', {
+      id: mech.id,
+      estimate: m.estimate,
+      need: mech.need,
+      estimateError: Math.abs((m.estimate ?? mech.need) - mech.need),
+      failCount: m.failCount
+    });
+    setTimeout(() => {
+      closeMechanism();
+      const estErr = Math.abs((m.estimate ?? mech.need) - mech.need);
+      if (m.estimate !== null) {
+        showHint(estErr <= 1
+          ? `你猜 ${m.estimate} 颗，正好 ${mech.need} 颗，估得真准！`
+          : `你猜 ${m.estimate} 颗，实际需要 ${mech.need} 颗。下次先估再试！`, 3000);
+      }
+      finishMechanism(mech, m);
+    }, 1800);
+  }
+
+  // 机关完成 → 复用关卡完成链路（星级、奖励、世界变化、成就、任务）
+  function finishMechanism(mech, m) {
+    const level = LEVELS.flat().find(item => item.id === mech.levelId);
+    if (!level) return;
+    const region = REGIONS[0];
+    const firstClear = !state.player.completedLevels.includes(level.id);
+    const estErr = m.estimate === null ? 99 : Math.abs(m.estimate - mech.need);
+    const independentCorrect = (m.failCount === 0 ? 1 : 0) + (estErr <= 1 ? 1 : 0);
+    const starsThisRun = Learning.calculateStars({
+      questionCount: 2,
+      independentCorrect,
+      transferFirstTry: m.failCount === 0,
+      transferHintTier: 0
+    });
+    state.player.levelStars[level.id] = Math.max(state.player.levelStars[level.id] || 0, starsThisRun);
+    const missionId = Learning.WIND_MISSIONS[level.id]?.id;
+    if (missionId && !state.learning.completedPuzzles.includes(missionId)) {
+      state.learning.completedPuzzles.push(missionId);
+    }
+    state.learning = Learning.clearMissionCheckpoint(state.learning, level.id);
+    mech.applyWorldChange();
+    const levelQuestNote = questCompletionNote(recordQuestProgress('level', 1));
+    if (levelQuestNote) showHint(levelQuestNote, 3000);
+    const rewards = firstClear ? { gems: 60 + (hasPassive('gemFind') ? 15 : 0), exp: 100 } : { gems: 0, exp: 0 };
+    let levelsGained = 0;
+    if (firstClear) {
+      state.player.completedLevels.push(level.id);
+      levelsGained = grantRewards(rewards);
+    }
+    const allCompleted = LEVELS[0].every(item => state.player.completedLevels.includes(item.id));
+    let newlyUnlockedRegion = null;
+    if (allCompleted && !state.player.unlockedRegions.includes(1)) {
+      state.player.unlockedRegions.push(1);
+      newlyUnlockedRegion = 1;
+    }
+    checkAchievements();
+    saveGame();
+    trackEvent('level_complete', { levelId: level.id, source: 'mechanism', firstClear, stars: starsThisRun });
+    showReward(level, region, {
+      rewards,
+      stars: starsThisRun,
+      firstClear,
+      allCompleted,
+      newlyUnlockedRegion,
+      levelsGained,
+      completionSource: 'mechanism'
+    });
   }
 
   // 激活传送点
@@ -3102,6 +3440,26 @@ window.addEventListener('unhandledrejection', function(e) {
     trackEvent('level_start', { levelId: level.id, region: rid });
 
     const mission = Learning.WIND_MISSIONS[level.id];
+    // 0-0 已改造为地图实体机关：不再打开任务卡，引导孩子去风车前修复
+    if (level.id === '0-0') {
+      if (state.map.worldChanges.windmillRestored) {
+        showHint('风车已经修好啦！去挑战后面的关卡吧');
+        return;
+      }
+      showScreen('world-map');
+      renderMap();
+      session.playerX = 1500;
+      session.playerY = 2560;
+      session.targetX = session.playerX;
+      session.targetY = session.playerY;
+      session.isMoving = false;
+      session.moveMode = null;
+      updatePlayerSprite();
+      updateCamera();
+      showHint('去风车前修复它！先收集周围的 🍃 风种', 3000);
+      trackEvent('mechanism_guide', { levelId: level.id });
+      return;
+    }
     if (rid === 0 && mission) {
       startLearningMission(mission);
       return;
@@ -4829,7 +5187,7 @@ window.addEventListener('unhandledrejection', function(e) {
     changePanel.classList.add('play-restoration');
     $('#reward-change-icon').textContent = worldChange.icon;
     $('#reward-change-title').textContent = worldChange.title;
-    $('#reward-title').textContent = result.completionSource === 'mission' ? '世界修复完成' : '探索任务完成';
+    $('#reward-title').textContent = ['mission', 'mechanism'].includes(result.completionSource) ? '世界修复完成' : '探索任务完成';
     $('#reward-stars').textContent = '⭐'.repeat(result.stars) + '☆'.repeat(3 - result.stars);
     $('#reward-stars').setAttribute('aria-label', `获得 ${result.stars} 项成长记录，共 3 项`);
     const growthLabels = ['完成修复', '讲清关系', '迁移新情境'];
@@ -4845,9 +5203,11 @@ window.addEventListener('unhandledrejection', function(e) {
         <div class="reward-item"><div class="reward-icon">✨</div><div class="reward-count">+${result.rewards.exp} EXP</div></div>
       `
       : '<div class="reward-item"><div class="reward-icon">✓</div><div class="reward-count">已领取首通奖励</div></div>';
-    let msg = result.completionSource === 'mission'
-      ? `你用数学关系解决了「${level.name}」，并完成了新的情境迁移。`
-      : `你化解了${region.enemyName}的阻碍，成功掌握了「${level.desc}」！`;
+    let msg = result.completionSource === 'mechanism'
+      ? `你先估算、再亲手投放验证，修复了「${level.name}」！`
+      : result.completionSource === 'mission'
+        ? `你用数学关系解决了「${level.name}」，并完成了新的情境迁移。`
+        : `你化解了${region.enemyName}的阻碍，成功掌握了「${level.desc}」！`;
     if (result.newlyUnlockedRegion !== null) {
       msg += `${region.name}已全部净化，${REGIONS[result.newlyUnlockedRegion].name}已解锁！`;
     } else if (result.allCompleted) {
@@ -4904,6 +5264,7 @@ window.addEventListener('unhandledrejection', function(e) {
     updatePlayerSprite,
     updateCamera,
     tryEnterRegion,
-    openSkillTree
+    openSkillTree,
+    openMechanism
   };
 })();

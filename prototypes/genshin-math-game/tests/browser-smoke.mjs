@@ -405,55 +405,95 @@ try {
   assert.deepEqual(report.story.position, storyPosition);
   assert.equal(report.story.screen, 'world-map');
 
+  stage('填充式机关：收集风种-估算-投放-修复风车');
+  await evaluate(`Object.assign(window.__game.session,{
+    playerX:1500,playerY:2300,targetX:1500,targetY:2300,isMoving:false,moveMode:null
+  });window.__game.updatePlayerSprite()`);
+  await sleep(500);
+  report.materials = await evaluate(`({
+    seeds: window.__game.state.materials.windSeed,
+    hud: document.querySelector('#mini-seeds').textContent
+  })`);
+  assert.ok(report.materials.seeds >= 1, '靠近风种应自动收集');
+  assert.equal(Number(report.materials.hud) >= 1, true, 'HUD 应显示风种数');
+  await evaluate('window.__game.state.materials.windSeed = 8');
+  // 打开机关 → 估算 7 → 投放
+  await evaluate('window.__game.openMechanism("windmill")');
+  await waitFor('!document.querySelector("#mechanism-panel").classList.contains("hidden")');
+  assert.equal(await evaluate('window.__game.session.mapActive === true'), true);
+  await evaluate(`(() => {
+    document.querySelector('#estimate-plus').click();
+    document.querySelector('#estimate-plus').click();
+    document.querySelector('#btn-estimate-commit').click();
+  })()`);
+  await waitFor('!document.querySelector("#mechanism-fill").classList.contains("hidden")');
+  assert.equal(await evaluate('window.__game.session.mechanism.estimate'), 7);
+  // 放 7 颗 → 启动风车 → "太多"物理反馈，不应误完成
+  await evaluate('(() => { for (let i = 0; i < 7; i++) document.querySelector("#btn-mech-place").click(); })()');
+  await evaluate('document.querySelector("#btn-mech-verify").click()');
+  report.mechOver = await evaluate(`({
+    feedback: document.querySelector('#mech-feedback').textContent,
+    filled: window.__game.session.mechanism.filled,
+    completed: window.__game.state.player.completedLevels.includes('0-0')
+  })`);
+  assert.match(report.mechOver.feedback, /太多/);
+  assert.equal(report.mechOver.completed, false, '放多不应误完成');
+  // 取回 1 颗 → 再启动 → 正好 6 颗 → 成功：叶片转动、符号定格、关卡完成
+  await evaluate('document.querySelector("#btn-mech-take").click()');
+  await evaluate('document.querySelector("#btn-mech-verify").click()');
+  await waitFor('window.__game.state.map.worldChanges.windmillRestored === true', 15000);
+  report.mechDone = await evaluate(`({
+    completed: window.__game.state.player.completedLevels.includes('0-0'),
+    puzzles: window.__game.state.learning.completedPuzzles,
+    panelHidden: document.querySelector('#mechanism-panel').classList.contains('hidden'),
+    screen: document.querySelector('.screen.active')?.id,
+    seedsLeft: window.__game.state.materials.windSeed
+  })`);
+  assert.equal(report.mechDone.completed, true, '机关成功应完成 0-0');
+  assert.ok(report.mechDone.puzzles.includes('wind-one-to-one'));
+  assert.equal(report.mechDone.screen, 'reward-screen');
+  // 0-0 入口重进：已修复时给出提示而非任务卡
+  await evaluate('window.__game.startLevel(0,0)');
+  assert.notEqual(await evaluate('document.querySelector(".screen.active")?.id'), 'puzzle-screen', '0-0 不应再打开任务卡');
+
   stage('任务检查点退出与恢复');
   await enterWindRegion();
-  await evaluate('document.querySelectorAll(".level-item")[0].click()');
+  await evaluate('document.querySelectorAll(".level-item")[1].click()');
   await choosePrediction();
   await capture('03-puzzle-operate');
   report.puzzleVisual = await evaluate(`({
     guideArt: getComputedStyle(document.querySelector('.puzzle-guide-avatar')).backgroundImage.includes('xingya-wind-guide-v2.webp'),
-    windSeeds: document.querySelectorAll('.puzzle-token .math-object.wind-seed').length,
-    draggable: document.querySelector('.puzzle-token:not(.used)').draggable,
-    tokenSize: Math.round(document.querySelector('.puzzle-token:not(.used)').getBoundingClientRect().width),
+    actionBtn: Math.round(document.querySelector('[data-part-action="move"]').getBoundingClientRect().height),
     horizontalOverflow: document.querySelector('.puzzle-card').scrollWidth > document.querySelector('.puzzle-card').clientWidth + 1,
     hintsVisible: document.querySelector('#mission-hints').getBoundingClientRect().bottom <= innerHeight
   })`);
-  assert.deepEqual({ guideArt: report.puzzleVisual.guideArt, windSeeds: report.puzzleVisual.windSeeds, draggable: report.puzzleVisual.draggable },
-    { guideArt: true, windSeeds: 6, draggable: true });
-  assert.ok(report.puzzleVisual.tokenSize >= 56, '数学物件应提供至少 56px 的主要操作触点');
+  assert.equal(report.puzzleVisual.guideArt, true);
+  assert.ok(report.puzzleVisual.actionBtn >= 40, '操作按钮应提供足够大的触点');
   assert.equal(report.puzzleVisual.horizontalOverflow, false, '桌面任务卡不应出现横向滚动');
   assert.equal(report.puzzleVisual.hintsVisible, true, '分层提示应在操作首屏内可见');
-  await evaluate(`(() => {
-    const token = document.querySelector('.puzzle-token:not(.used)');
-    const zone = document.querySelector('.puzzle-zone.match-zone');
-    const transfer = new DataTransfer();
-    token.dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:transfer}));
-    zone.dispatchEvent(new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:transfer}));
-    zone.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:transfer}));
-  })()`);
-  assert.equal(await evaluate('window.__game.session.missionInteraction.assignments.filter(value => value !== null).length'), 1,
-    '拖放后应磁吸到一个空位置');
+  await evaluate('document.querySelector("[data-part-action=move]").click()');
+  assert.equal(await evaluate('window.__game.session.missionInteraction.moved'), 1,
+    '操作一步应累计到检查点交互里');
   await evaluate('document.querySelector("#btn-puzzle-exit").click()');
   await waitFor('document.querySelector(".screen.active")?.id === "region-detail"');
   report.checkpointSaved = await evaluate(`(() => {
-    const cp = window.__game.state.learning.missionCheckpoints['0-0'];
-    return { phase: cp.phase, filled: cp.interaction.assignments.filter(value => value !== null).length,
-      label: document.querySelectorAll('.level-item')[0].textContent };
+    const cp = window.__game.state.learning.missionCheckpoints['0-1'];
+    return { phase: cp.phase, moved: cp.interaction.moved,
+      label: document.querySelectorAll('.level-item')[1].textContent };
   })()`);
   assert.equal(report.checkpointSaved.phase, 'operate');
-  assert.equal(report.checkpointSaved.filled, 1);
+  assert.equal(report.checkpointSaved.moved, 1);
   assert.match(report.checkpointSaved.label, /继续上次：操作/);
-  await evaluate('document.querySelectorAll(".level-item")[0].click()');
+  await evaluate('document.querySelectorAll(".level-item")[1].click()');
   await waitFor('window.__game.session.missionPhase === "operate"');
-  assert.equal(await evaluate('document.querySelectorAll(".puzzle-token.used").length'), 1);
-  report.firstMissionCompletion = await finishCurrentMission();
+  assert.equal(await evaluate('window.__game.session.missionInteraction.moved'), 1);
+  report.firstMissionCompletion = await finishCurrentMission({ wrongPrimary: true });
   assert.match(report.firstMissionCompletion, /完成修复/);
-  assert.equal(await evaluate('window.__game.state.learning.missionCheckpoints["0-0"]'), undefined);
+  assert.equal(await evaluate('window.__game.state.learning.missionCheckpoints["0-1"]'), undefined);
 
   stage('五种数学交互与三类学习证据');
   const missionOptions = [
-    { index: 1, options: { wrongExpression: true } },
-    { index: 2, options: {} },
+    { index: 2, options: { wrongExpression: true } },
     { index: 3, options: { wrongPrimary: true } },
     { index: 4, options: { hintTier: 1 } }
   ];
@@ -539,7 +579,7 @@ try {
   stage('重复任务不重复发放奖励');
   const beforeReplay = await evaluate('({gems:window.__game.state.player.gems,exp:window.__game.state.player.exp})');
   await enterWindRegion();
-  await evaluate('document.querySelectorAll(".level-item")[0].click()');
+  await evaluate('document.querySelectorAll(".level-item")[1].click()');
   await finishCurrentMission();
   report.replay = await evaluate(`({
     gems: window.__game.state.player.gems,
@@ -756,7 +796,10 @@ try {
   });
   await capture('06-mobile-map');
   await enterWindRegion();
-  await evaluate('document.querySelectorAll(".level-item")[0].click()');
+  // 移动端布局验证用：直接标记 0-0 完成以解锁 0-1（机关路径已在前面阶段覆盖）
+  await evaluate(`window.__game.state.player.completedLevels.push('0-0');
+    document.querySelector('#region-detail') && window.__game.showRegionDetail(0)`);
+  await evaluate('document.querySelectorAll(".level-item")[1].click()');
   await choosePrediction();
   report.mobilePuzzle = await evaluate(`(() => {
     const card = document.querySelector('.puzzle-card');
@@ -764,12 +807,12 @@ try {
     return {
       cardInside: rect.left >= 0 && rect.right <= innerWidth,
       horizontalOverflow: card.scrollWidth > card.clientWidth + 1,
-      tokenSize: Math.round(document.querySelector('.puzzle-token:not(.used)').getBoundingClientRect().width)
+      tokenSize: Math.round(document.querySelector('[data-part-action="move"]').getBoundingClientRect().height)
     };
   })()`);
   assert.deepEqual({ cardInside: report.mobilePuzzle.cardInside, horizontalOverflow: report.mobilePuzzle.horizontalOverflow },
     { cardInside: true, horizontalOverflow: false });
-  assert.ok(report.mobilePuzzle.tokenSize >= 56);
+  assert.ok(report.mobilePuzzle.tokenSize >= 40);
   await capture('07-mobile-puzzle');
   await send('Emulation.clearDeviceMetricsOverride');
 
