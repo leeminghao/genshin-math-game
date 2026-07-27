@@ -1015,6 +1015,8 @@ const WORLD_LAYOUT = {
   sceneryObstacles: [
     // 世界变化：风车、风桥、风暴核心
     { x: 1640, y: 2420, r: 80, label: 'windmill' },
+    { x: 1350, y: 2350, r: 50, label: 'windcore' },
+    { x: 1850, y: 2650, r: 50, label: 'windtower' },
     { x: 1720, y: 2700, r: 60, label: 'wind-bridge' },
     { x: 1170, y: 2710, r: 70, label: 'storm-core' },
     // 村庄：玩家不可直接穿过房子

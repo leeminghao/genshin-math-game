@@ -406,10 +406,14 @@ try {
   assert.equal(report.story.screen, 'world-map');
 
   stage('填充式机关：收集风种-估算-投放-修复风车');
+  // 未完成时：0-0 入口应引导到地图机关而非任务卡
+  await evaluate('window.__game.startLevel(0,0)');
+  await sleep(400);
+  assert.equal(await evaluate('document.querySelector(".screen.active")?.id'), 'world-map', '0-0 未完成时应引导到地图');
   await evaluate(`Object.assign(window.__game.session,{
     playerX:1500,playerY:2300,targetX:1500,targetY:2300,isMoving:false,moveMode:null
   });window.__game.updatePlayerSprite()`);
-  await sleep(500);
+  await sleep(3600); // 引导提示期间 controlsLocked=true，等提示关闭后收集检测才会运行
   report.materials = await evaluate(`({
     seeds: window.__game.state.materials.windSeed,
     hud: document.querySelector('#mini-seeds').textContent
@@ -424,6 +428,7 @@ try {
   await evaluate(`(() => {
     document.querySelector('#estimate-plus').click();
     document.querySelector('#estimate-plus').click();
+    document.querySelector('#estimate-plus').click();
     document.querySelector('#btn-estimate-commit').click();
   })()`);
   await waitFor('!document.querySelector("#mechanism-fill").classList.contains("hidden")');
@@ -433,7 +438,7 @@ try {
   await evaluate('document.querySelector("#btn-mech-verify").click()');
   report.mechOver = await evaluate(`({
     feedback: document.querySelector('#mech-feedback').textContent,
-    filled: window.__game.session.mechanism.filled,
+    filled: window.__game.session.mechanism.placed,
     completed: window.__game.state.player.completedLevels.includes('0-0')
   })`);
   assert.match(report.mechOver.feedback, /太多/);
@@ -452,9 +457,81 @@ try {
   assert.equal(report.mechDone.completed, true, '机关成功应完成 0-0');
   assert.ok(report.mechDone.puzzles.includes('wind-one-to-one'));
   assert.equal(report.mechDone.screen, 'reward-screen');
-  // 0-0 入口重进：已修复时给出提示而非任务卡
+  // 完成后：任务卡作为复习入口开放
   await evaluate('window.__game.startLevel(0,0)');
-  assert.notEqual(await evaluate('document.querySelector(".screen.active")?.id'), 'puzzle-screen', '0-0 不应再打开任务卡');
+  await waitFor('document.querySelector(".screen.active")?.id === "puzzle-screen"', 15000);
+  // 验证后退出复习任务卡并清理残留检查点，避免干扰后续阶段
+  await evaluate('document.querySelector("#btn-puzzle-exit").click()');
+  await waitFor('document.querySelector(".screen.active")?.id === "region-detail"');
+  await evaluate(`delete window.__game.state.learning.missionCheckpoints['0-0']`);
+
+  // 快速完成机关的助手：估算直接提交，按各类型驱动交互
+  async function completeMechanismQuick(id, levelId, material, runScript) {
+    await evaluate(`window.__game.state.materials["${material}"] = 20`);
+    await evaluate(`window.__game.openMechanism("${id}")`);
+    await waitFor('!document.querySelector("#mechanism-panel").classList.contains("hidden")');
+    await evaluate('document.querySelector("#btn-estimate-commit").click()');
+    await waitFor('!document.querySelector("#mechanism-fill").classList.contains("hidden")');
+    await evaluate(runScript);
+    await waitFor(`window.__game.state.player.completedLevels.includes("${levelId}")`, 15000);
+    await waitFor('document.querySelector(".screen.active")?.id === "reward-screen"');
+  }
+
+  stage('机关群：风核充能、灯塔行列、风桥均分、风暴配平');
+  // 0-1 fillTo：已有 4，补 3 → 溢出反馈先行验证
+  await completeMechanismQuick('windcore', '0-1', 'windSeed', `(() => {
+    for (let i = 0; i < 3; i++) document.querySelector('#btn-mech-place').click();
+    document.querySelector('#btn-mech-verify').click();
+  })()`);
+  report.windcore = await evaluate(`({
+    lit: window.__game.state.map.worldChanges.windcoreLit,
+    completed: window.__game.state.player.completedLevels.includes('0-1')
+  })`);
+  assert.deepEqual(report.windcore, { lit: true, completed: true });
+  // 0-2 grid：安 12 盏点亮，行列计数出现
+  await completeMechanismQuick('windtower', '0-2', 'windLamp', `(() => {
+    for (let i = 0; i < 12; i++) document.querySelector('#btn-mech-place').click();
+    document.querySelector('#btn-mech-verify').click();
+  })()`);
+  report.windtower = await evaluate(`({
+    lit: window.__game.state.map.worldChanges.windtowerLit,
+    completed: window.__game.state.player.completedLevels.includes('0-2')
+  })`);
+  assert.deepEqual(report.windtower, { lit: true, completed: true });
+  // 0-3 distribute：4/4/4 均分 → 自动成功；先验证不均分会"桥还歪着"
+  await evaluate('window.__game.state.materials.plank = 20');
+  await evaluate('window.__game.openMechanism("windbridge")');
+  await waitFor('!document.querySelector("#mechanism-panel").classList.contains("hidden")');
+  await evaluate('document.querySelector("#btn-estimate-commit").click()');
+  await waitFor('!document.querySelector("#mechanism-fill").classList.contains("hidden")');
+  await evaluate(`(() => {
+    for (let i = 0; i < 12; i++) document.querySelector('#btn-mech-place').click();
+  })()`);
+  report.bridgeUneven = await evaluate(`({
+    feedback: document.querySelector('#mech-feedback').textContent,
+    completed: window.__game.state.player.completedLevels.includes('0-3')
+  })`);
+  assert.match(report.bridgeUneven.feedback, /歪/);
+  assert.equal(report.bridgeUneven.completed, false, '不均分不应成功');
+  await evaluate(`(() => {
+    const zones = [...document.querySelectorAll('.mech-zone')];
+    zones[0].click();
+    for (let i = 0; i < 8; i++) document.querySelector('#btn-mech-take').click();
+    zones[1].click();
+    for (let i = 0; i < 4; i++) document.querySelector('#btn-mech-place').click();
+    zones[2].click();
+    for (let i = 0; i < 4; i++) document.querySelector('#btn-mech-place').click();
+  })()`);
+  await waitFor('window.__game.state.player.completedLevels.includes("0-3")', 15000);
+  // 0-4 balance：右盘放 5 → 自动平衡
+  await completeMechanismQuick('stormcore', '0-4', 'windCrystal', `(() => {
+    for (let i = 0; i < 5; i++) document.querySelector('#btn-mech-place').click();
+  })()`);
+  report.stormcore = await evaluate(`({
+    calmed: window.__game.state.map.worldChanges.stormCalmed,
+    completed: window.__game.state.player.completedLevels.includes('0-4')
+  })`);
+  assert.deepEqual(report.stormcore, { calmed: true, completed: true });
 
   stage('任务检查点退出与恢复');
   await enterWindRegion();
@@ -537,7 +614,9 @@ try {
   assert.equal(report.windSlice.completedMissions.length, 5);
   assert.ok(report.windSlice.unlockedRegions.includes(1));
   assert.equal(report.windSlice.currentRegion, 0, '解锁新区域后不应强制改变当前探索区域');
-  assert.deepEqual(report.windSlice.changes, { windmillRestored: true, bridgeOpened: true, stormCalmed: true });
+  assert.deepEqual(report.windSlice.changes, {
+    windmillRestored: true, windcoreLit: true, windtowerLit: true, bridgeOpened: true, stormCalmed: true
+  });
   assert.ok(report.windSlice.errorTypes.includes('language'));
   assert.ok(report.windSlice.errorTypes.includes('representation'));
   for (const kind of ['prediction', 'model', 'explanation', 'verification', 'transfer']) {
@@ -771,7 +850,9 @@ try {
     map: {}, achievements: {}, settings: { bgm: false, sfx: false }
   });
   report.legacy = await evaluate('window.__game.state.map.worldChanges');
-  assert.deepEqual(report.legacy, { windmillRestored: true, bridgeOpened: true, stormCalmed: false });
+  assert.deepEqual(report.legacy, {
+    windmillRestored: true, windcoreLit: true, windtowerLit: true, bridgeOpened: true, stormCalmed: false
+  });
 
   stage('移动端地图与任务台边界');
   await send('Emulation.setDeviceMetricsOverride', {
@@ -796,8 +877,8 @@ try {
   });
   await capture('06-mobile-map');
   await enterWindRegion();
-  // 移动端布局验证用：直接标记 0-0 完成以解锁 0-1（机关路径已在前面阶段覆盖）
-  await evaluate(`window.__game.state.player.completedLevels.push('0-0');
+  // 移动端布局验证用：直接标记 0-0/0-1 完成以解锁复习入口（机关路径已在前面阶段覆盖）
+  await evaluate(`window.__game.state.player.completedLevels.push('0-0','0-1');
     document.querySelector('#region-detail') && window.__game.showRegionDetail(0)`);
   await evaluate('document.querySelectorAll(".level-item")[1].click()');
   await choosePrediction();

@@ -60,21 +60,88 @@ window.addEventListener('unhandledrejection', function(e) {
     { id: 'scroll', name: '智慧卷轴', emoji: '📜', cost: 25, desc: '战斗中免费查看当前题的完整提示' }
   ];
 
-  // 填充式机关：地图上的数学实体。收集材料 → 估算数量 → 投放 → 物理反馈（不够/正好/多了）→ 符号定格
+  // 填充式机关：地图上的数学实体。收集材料 → 估算数量 → 投放 → 物理反馈（不够/正好/多了/歪了）→ 符号定格
+  // type 说明：
+  //   fill       精确数量填充（0-0 风车）
+  //   fillTo     带初始量填充，体会"部分+部分=整体"（0-1 风核）
+  //   grid       行列安放，体会"每行×行数=总数"（0-2 风灯塔）
+  //   distribute N 个材料均分到 M 个区域，倾斜实时反馈（0-3 风桥）
+  //   balance    双盘配平，横梁实时反馈（0-4 风暴核心）
   const MECHANISMS = {
     windmill: {
-      id: 'windmill',
-      levelId: '0-0',
+      id: 'windmill', levelId: '0-0', type: 'fill',
       elementId: 'windmill-change',
       x: 1640, y: 2420, radius: 170,
-      title: '沉睡的风车',
-      material: 'windSeed',
-      itemEmoji: '🍃', slotEmoji: '🌀',
+      title: '沉睡的风车', actionLabel: '修复',
+      material: 'windSeed', itemEmoji: '🍃', slotEmoji: '🌀',
       need: 6,
+      entityEmoji: '🏠', subEmoji: '✣',
+      estimatePrompt: '大概要几颗？',
+      estimateTarget: 6,
       restored: () => state.map.worldChanges.windmillRestored,
       restoreText: '风车转得正欢！去别处冒险吧',
       symbols: ['🍃×6 → 🌀×6', '一一对应！'],
       applyWorldChange: () => { state.map.worldChanges.windmillRestored = true; }
+    },
+    windcore: {
+      id: 'windcore', levelId: '0-1', type: 'fillTo',
+      elementId: 'windcore-change',
+      x: 1350, y: 2350, radius: 170,
+      title: '黯淡的风核', actionLabel: '充能',
+      material: 'windSeed', itemEmoji: '🍃', slotEmoji: '✦',
+      start: 4, need: 7,
+      entityEmoji: '🔮', subEmoji: '✦',
+      estimatePrompt: '还要补几颗？',
+      estimateTarget: 3,
+      restored: () => state.map.worldChanges.windcoreLit,
+      restoreText: '风核亮着呢！去别处冒险吧',
+      symbols: ['4 + 3 = 7', '部分+部分=整体'],
+      applyWorldChange: () => { state.map.worldChanges.windcoreLit = true; }
+    },
+    windtower: {
+      id: 'windtower', levelId: '0-2', type: 'grid',
+      elementId: 'windtower-change',
+      x: 1850, y: 2650, radius: 170,
+      title: '熄灭的风灯塔', actionLabel: '点亮',
+      material: 'windLamp', itemEmoji: '🏮', slotEmoji: '○',
+      rows: 3, cols: 4,
+      entityEmoji: '🗼', subEmoji: '🏮',
+      estimatePrompt: '一共要多少盏？',
+      estimateTarget: 12,
+      restored: () => state.map.worldChanges.windtowerLit,
+      restoreText: '灯塔亮着呢！去别处冒险吧',
+      symbols: ['3 行 × 4 列 = 12', '每行×行数=总数'],
+      applyWorldChange: () => { state.map.worldChanges.windtowerLit = true; }
+    },
+    windbridge: {
+      id: 'windbridge', levelId: '0-3', type: 'distribute',
+      elementId: 'wind-bridge-change',
+      x: 1720, y: 2700, radius: 170,
+      title: '断裂的风桥', actionLabel: '铺设',
+      material: 'plank', itemEmoji: '🪵', zoneEmoji: '＝',
+      total: 12, zones: 3, zoneName: '桥段',
+      entityEmoji: '🌉', subEmoji: '🪵',
+      estimatePrompt: '每段桥几块？',
+      estimateTarget: 4,
+      restored: () => state.map.worldChanges.bridgeOpened,
+      restoreText: '风桥平平的，可以通行！',
+      symbols: ['12 ÷ 3 = 4', '一样多才平稳'],
+      applyWorldChange: () => { state.map.worldChanges.bridgeOpened = true; }
+    },
+    stormcore: {
+      id: 'stormcore', levelId: '0-4', type: 'balance',
+      elementId: 'storm-core-change',
+      x: 1170, y: 2710, radius: 170,
+      title: '失衡的风暴核心', actionLabel: '配平',
+      material: 'windCrystal', itemEmoji: '🔮', slotEmoji: '◌',
+      leftStart: 5, need: 5,
+      entityEmoji: '⚖️', subEmoji: '◉',
+      estimatePrompt: '右盘放几颗？',
+      estimateTarget: 5,
+      restored: () => state.map.worldChanges.stormCalmed,
+      restoreText: '风暴核心很安静。去别处冒险吧',
+      symbols: ['5 = 5', '两边相等就平衡'],
+      applyWorldChange: () => { state.map.worldChanges.stormCalmed = true; }
     }
   };
 
@@ -167,6 +234,8 @@ window.addEventListener('unhandledrejection', function(e) {
       collectedMaterials: [],
       worldChanges: {
         windmillRestored: false,
+        windcoreLit: false,
+        windtowerLit: false,
         bridgeOpened: false,
         stormCalmed: false
       }
@@ -224,9 +293,12 @@ window.addEventListener('unhandledrejection', function(e) {
     equipment: {
       weapon: 'wooden'
     },
-    // 收集材料：机关的运算对象（风种修风车、石料砌城墙……）
+    // 收集材料：机关的运算对象（风种修风车、木板铺风桥……）
     materials: {
-      windSeed: 0
+      windSeed: 0,
+      windLamp: 0,
+      plank: 0,
+      windCrystal: 0
     }
   };
 
@@ -595,6 +667,10 @@ window.addEventListener('unhandledrejection', function(e) {
     // 兼容 v2.x 存档：已经完成对应挑战的玩家不应在升级后看到世界倒退。
     normalized.map.worldChanges.windmillRestored = rawWorldChanges.windmillRestored === true
       || normalized.player.completedLevels.includes('0-0');
+    normalized.map.worldChanges.windcoreLit = rawWorldChanges.windcoreLit === true
+      || normalized.player.completedLevels.includes('0-1');
+    normalized.map.worldChanges.windtowerLit = rawWorldChanges.windtowerLit === true
+      || normalized.player.completedLevels.includes('0-2');
     normalized.map.worldChanges.bridgeOpened = rawWorldChanges.bridgeOpened === true
       || ['0-0', '0-1', '0-2', '0-3'].every(id => normalized.player.completedLevels.includes(id));
     normalized.map.worldChanges.stormCalmed = rawWorldChanges.stormCalmed === true
@@ -1381,25 +1457,23 @@ window.addEventListener('unhandledrejection', function(e) {
       sfx('click');
     });
     $('#btn-estimate-commit')?.addEventListener('click', commitEstimate);
-    $('#btn-mech-place')?.addEventListener('click', placeMaterial);
-    $('#btn-mech-take')?.addEventListener('click', takeMaterial);
-    $('#btn-mech-verify')?.addEventListener('click', verifyMechanism);
     $('#btn-mechanism-close')?.addEventListener('click', closeMechanism);
-    $('#windmill-change')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (!session.mapActive || session.controlsLocked) return;
-      if (session.currentMechanism === 'windmill') {
-        openMechanism('windmill');
-      } else {
-        // 远处点风车：自动走到机关旁边（原神式点击寻路）。
-        // 注意顺序：showHint 会短暂锁控制并重置移动目标，必须先提示再设寻路。
-        const mech = MECHANISMS.windmill;
-        showHint('正在走向风车…', 1500);
-        session.targetX = mech.x;
-        session.targetY = mech.y + 140;
-        session.isMoving = true;
-        session.moveMode = 'target';
-      }
+    // 机关实体点击：近处直接开面板，远处自动寻路（原神式点击移动）
+    Object.values(MECHANISMS).forEach(mech => {
+      document.getElementById(mech.elementId)?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!session.mapActive || session.controlsLocked) return;
+        if (session.currentMechanism === mech.id) {
+          openMechanism(mech.id);
+        } else {
+          // 注意顺序：showHint 会短暂锁控制并重置移动目标，必须先提示再设寻路
+          showHint(`正在走向${mech.title}…`, 1500);
+          session.targetX = mech.x;
+          session.targetY = mech.y + 140;
+          session.isMoving = true;
+          session.moveMode = 'target';
+        }
+      });
     });
   }
 
@@ -2057,13 +2131,21 @@ window.addEventListener('unhandledrejection', function(e) {
       const windmill = $('#windmill-change');
       const bridge = $('#wind-bridge-change');
       const stormCore = $('#storm-core-change');
+      const windcore = $('#windcore-change');
+      const windtower = $('#windtower-change');
       windmill?.classList.toggle('restored', state.map.worldChanges.windmillRestored);
+      windcore?.classList.toggle('lit', state.map.worldChanges.windcoreLit);
+      windtower?.classList.toggle('lit', state.map.worldChanges.windtowerLit);
       bridge?.classList.toggle('opened', state.map.worldChanges.bridgeOpened);
       stormCore?.classList.toggle('calmed', state.map.worldChanges.stormCalmed);
       const windmillLabel = windmill?.querySelector('.world-change-label');
       const bridgeLabel = bridge?.querySelector('.world-change-label');
       const stormLabel = stormCore?.querySelector('.world-change-label');
+      const windcoreLabel = windcore?.querySelector('.world-change-label');
+      const windtowerLabel = windtower?.querySelector('.world-change-label');
       if (windmillLabel) windmillLabel.textContent = state.map.worldChanges.windmillRestored ? '重新转动的风车' : '沉睡的风车';
+      if (windcoreLabel) windcoreLabel.textContent = state.map.worldChanges.windcoreLit ? '明亮的风核' : '黯淡的风核';
+      if (windtowerLabel) windtowerLabel.textContent = state.map.worldChanges.windtowerLit ? '闪亮的风灯塔' : '熄灭的风灯塔';
       if (bridgeLabel) bridgeLabel.textContent = state.map.worldChanges.bridgeOpened ? '贯通的风桥' : '断裂的风桥';
       if (stormLabel) stormLabel.textContent = state.map.worldChanges.stormCalmed ? '平静的风暴核心' : '失衡的风暴核心';
 
@@ -2642,7 +2724,7 @@ window.addEventListener('unhandledrejection', function(e) {
     Object.values(MECHANISMS).forEach(mech => {
       if (mech.restored()) return;
       const dist = Math.hypot(session.playerX - mech.x, session.playerY - mech.y);
-      if (dist < mech.radius) candidates.push({ type: 'mechanism', id: mech.id, dist, label: '修复' });
+      if (dist < mech.radius) candidates.push({ type: 'mechanism', id: mech.id, dist, label: mech.actionLabel || '修复' });
     });
 
     const target = candidates.sort((a, b) => a.dist - b.dist)[0] || null;
@@ -2712,7 +2794,17 @@ window.addEventListener('unhandledrejection', function(e) {
     const mech = MECHANISMS[id];
     if (!mech) return;
     if (!session.mechanism || session.mechanism.id !== id) {
-      session.mechanism = { id, estimate: null, filled: 0, failCount: 0, resolved: false };
+      session.mechanism = {
+        id,
+        estimate: null,
+        estimateValue: Math.max(1, (mech.estimateTarget || 5) - 2),
+        placed: 0,
+        placedCells: mech.type === 'grid' ? Array(mech.rows * mech.cols).fill(false) : null,
+        zones: mech.type === 'distribute' ? Array(mech.zones).fill(0) : null,
+        activeZone: 0,
+        failCount: 0,
+        resolved: false
+      };
     }
     if (mech.restored()) {
       session.mechanism.resolved = true;
@@ -2730,71 +2822,205 @@ window.addEventListener('unhandledrejection', function(e) {
     focusWorldMap();
   }
 
+  const MECH_VERIFY_LABELS = { fill: '启动风车！', fillTo: '启动风核！', grid: '点亮灯塔！' };
+  const MECH_PLACE_LABELS = { fill: '放一颗', fillTo: '放一颗', grid: '安一盏', distribute: '放一块', balance: '放一颗' };
+  const MECH_TAKE_LABELS = { fill: '取回一颗', fillTo: '取回一颗', grid: '取一盏', distribute: '退回一块', balance: '取一颗' };
+
+  function mechInv(mech) { return state.materials[mech.material] || 0; }
+
+  function mechWobble() {
+    const sub = $('#mech-entity-sub');
+    if (!sub) return;
+    sub.classList.remove('wobble');
+    void sub.offsetWidth;
+    sub.classList.add('wobble');
+  }
+
+  function mechButton(label, primary, onClick, disabled, id) {
+    const b = document.createElement('button');
+    b.className = primary ? 'genshin-btn primary' : 'genshin-btn small';
+    b.textContent = label;
+    b.disabled = !!disabled;
+    if (id) b.id = id;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function setMechFeedback(text, warn) {
+    const fb = $('#mech-feedback');
+    fb.className = 'mech-feedback' + (warn ? ' warn' : '');
+    fb.textContent = text;
+  }
+
   function renderMechanism() {
     const mech = MECHANISMS[session.mechanism?.id];
     if (!mech) return;
     const m = session.mechanism;
-    const blades = $('#mech-blades');
-    blades.classList.toggle('spinning', mech.restored());
-    $('#mechanism-title').textContent = mech.restored() ? '转动的风车' : mech.title;
+    $('#mech-entity-emoji').textContent = mech.entityEmoji;
+    const sub = $('#mech-entity-sub');
+    sub.textContent = mech.subEmoji;
+    sub.classList.toggle('spinning', mech.restored());
+    sub.classList.toggle('lit', mech.restored());
+    $('#mechanism-title').textContent = mech.title;
     $('#mech-symbol-freeze').classList.add('hidden');
 
     if (mech.restored()) {
       $('#mechanism-estimate').classList.add('hidden');
       $('#mechanism-fill').classList.remove('hidden');
-      $('#mech-slots').innerHTML = '';
-      $('#mech-feedback').className = 'mech-feedback';
-      $('#mech-feedback').textContent = mech.restoreText;
-      $('#mech-inventory').textContent = `${mech.itemEmoji} × ${state.materials[mech.material] || 0}`;
-      $('#btn-mech-place').disabled = true;
-      $('#btn-mech-take').disabled = true;
-      $('#btn-mech-verify').disabled = true;
+      $('#mech-interaction').innerHTML = '';
+      $('#mech-actions').innerHTML = '';
+      setMechFeedback(mech.restoreText, false);
+      $('#mech-inventory').textContent = `${mech.itemEmoji} × ${mechInv(mech)}`;
       return;
     }
 
-    $('#btn-mech-place').disabled = false;
-    $('#btn-mech-take').disabled = false;
-    $('#btn-mech-verify').disabled = false;
     if (m.estimate === null) {
       // 估算阶段：让孩子自己写下一个数，建立承诺感
       $('#mechanism-estimate').classList.remove('hidden');
       $('#mechanism-fill').classList.add('hidden');
-      $('#estimate-value').textContent = '5';
-      m.estimateValue = 5;
+      $('#estimate-prompt').textContent = mech.estimatePrompt || '大概要多少？';
+      $('#estimate-value').textContent = String(m.estimateValue);
     } else {
       $('#mechanism-estimate').classList.add('hidden');
       $('#mechanism-fill').classList.remove('hidden');
-      renderMechSlots(mech, m);
+      renderMechInteraction(mech, m);
     }
   }
 
-  function renderMechSlots(mech, m, feedback) {
-    const slotsEl = $('#mech-slots');
-    slotsEl.innerHTML = '';
-    const total = Math.max(mech.need, m.filled);
+  function renderMechInteraction(mech, m) {
+    if (mech.type === 'fill' || mech.type === 'fillTo') renderFillInteract(mech, m);
+    else if (mech.type === 'grid') renderGridInteract(mech, m);
+    else if (mech.type === 'distribute') renderDistributeInteract(mech, m);
+    else if (mech.type === 'balance') renderBalanceInteract(mech, m);
+    $('#mech-inventory').textContent = `${mech.itemEmoji} × ${mechInv(mech)}`;
+  }
+
+  // ---------- fill / fillTo：槽位填充（fillTo 有锁定初始量） ----------
+  function renderFillInteract(mech, m, feedback) {
+    const start = mech.start || 0;
+    const zone = $('#mech-interaction');
+    zone.innerHTML = '';
+    const slotsEl = document.createElement('div');
+    slotsEl.className = 'mech-slots';
+    const total = Math.max(mech.need, start + m.placed);
     for (let i = 0; i < total; i++) {
       const slot = document.createElement('div');
-      const filled = i < m.filled;
-      slot.className = 'mech-slot' + (filled ? ' filled' : '');
+      const prefilled = i < start;
+      const filled = i < start + m.placed;
+      slot.className = 'mech-slot' + (prefilled ? ' prefilled' : '') + (filled && !prefilled ? ' filled' : '');
       if (!filled && feedback === 'short') slot.classList.add('empty-glow');
       slot.textContent = filled ? mech.itemEmoji : mech.slotEmoji;
       slotsEl.appendChild(slot);
     }
-    const inv = state.materials[mech.material] || 0;
-    $('#mech-inventory').textContent = `${mech.itemEmoji} × ${inv}`;
-    const fb = $('#mech-feedback');
-    fb.className = 'mech-feedback';
-    if (feedback === 'short') {
-      fb.classList.add('warn');
-      fb.textContent = `还差 ${mech.need - m.filled} 颗！去收集`;
-    } else if (feedback === 'over') {
-      fb.classList.add('warn');
-      fb.textContent = '太多了！取回几颗';
-    } else {
-      fb.textContent = `${m.filled} / ${mech.need}`;
-    }
-    $('#btn-mech-take').disabled = m.filled <= 0;
-    $('#btn-mech-place').disabled = inv <= 0;
+    zone.appendChild(slotsEl);
+
+    const actions = $('#mech-actions');
+    actions.innerHTML = '';
+    actions.appendChild(mechButton(MECH_VERIFY_LABELS[mech.type] || '启动！', true, verifyMechanism, false, 'btn-mech-verify'));
+    actions.appendChild(mechButton(MECH_PLACE_LABELS[mech.type], false, placeMaterial,
+      mechInv(mech) <= 0 || start + m.placed >= mech.need + 2, 'btn-mech-place'));
+    actions.appendChild(mechButton(MECH_TAKE_LABELS[mech.type], false, takeMaterial, m.placed <= 0, 'btn-mech-take'));
+
+    if (feedback === 'short') setMechFeedback(`还差 ${mech.need - start - m.placed} 颗！去收集`, true);
+    else if (feedback === 'over') setMechFeedback('太多了！取回几颗', true);
+    else setMechFeedback(`${start + m.placed} / ${mech.need}`, false);
+  }
+
+  // ---------- grid：行列安放 ----------
+  function renderGridInteract(mech, m, feedback) {
+    const zone = $('#mech-interaction');
+    zone.innerHTML = '';
+    const total = mech.rows * mech.cols;
+    const grid = document.createElement('div');
+    grid.className = 'mech-grid';
+    grid.style.gridTemplateColumns = `repeat(${mech.cols}, 1fr)`;
+    m.placedCells.forEach((filled, i) => {
+      const cell = document.createElement('div');
+      const row = Math.floor(i / mech.cols);
+      const rowFull = m.placedCells.slice(row * mech.cols, (row + 1) * mech.cols).every(Boolean);
+      cell.className = 'mech-grid-cell' + (filled ? ' filled' : '') + (!filled && feedback === 'short' && !rowFull ? ' empty-glow' : '');
+      cell.textContent = filled ? mech.itemEmoji : mech.slotEmoji;
+      grid.appendChild(cell);
+    });
+    zone.appendChild(grid);
+    // 行列计数：完成几行就显示几次"每行×行数"
+    const doneRows = Math.floor(m.placedCells.filter(Boolean).length / mech.cols);
+    const counter = document.createElement('div');
+    counter.className = 'mech-grid-counter';
+    counter.textContent = doneRows > 0
+      ? `${mech.cols} × ${doneRows} = ${mech.cols * doneRows}（${mech.rows} 行共 ${total}）`
+      : `${mech.rows} 行 ${mech.cols} 列，共 ${total} 盏`;
+    zone.appendChild(counter);
+
+    const placedCount = m.placedCells.filter(Boolean).length;
+    const actions = $('#mech-actions');
+    actions.innerHTML = '';
+    actions.appendChild(mechButton(MECH_VERIFY_LABELS.grid, true, verifyMechanism, false, 'btn-mech-verify'));
+    actions.appendChild(mechButton(MECH_PLACE_LABELS.grid, false, placeMaterial,
+      mechInv(mech) <= 0 || placedCount >= total, 'btn-mech-place'));
+    actions.appendChild(mechButton(MECH_TAKE_LABELS.grid, false, takeMaterial, placedCount <= 0, 'btn-mech-take'));
+
+    if (feedback === 'short') setMechFeedback('还有空位！继续安', true);
+    else setMechFeedback(`${placedCount} / ${total}`, false);
+  }
+
+  // ---------- distribute：均分，桥面实时倾斜 ----------
+  function renderDistributeInteract(mech, m, feedback) {
+    const zone = $('#mech-interaction');
+    zone.innerHTML = '';
+    // 桥面：按两端差值倾斜
+    const tilt = Math.max(-14, Math.min(14, (m.zones[0] - m.zones[m.zones.length - 1]) * 4));
+    const bridge = document.createElement('div');
+    bridge.className = 'mech-bridge';
+    bridge.style.transform = `rotate(${tilt}deg)`;
+    bridge.textContent = '🌉';
+    zone.appendChild(bridge);
+
+    const zonesEl = document.createElement('div');
+    zonesEl.className = 'mech-zones';
+    m.zones.forEach((count, z) => {
+      const zoneBtn = document.createElement('button');
+      zoneBtn.className = 'mech-zone' + (z === m.activeZone ? ' active' : '');
+      zoneBtn.innerHTML = `${mech.zoneName}${z + 1}<br><strong>${'▰'.repeat(count) || '空'}</strong><br><span>${count} 块</span>`;
+      zoneBtn.addEventListener('click', () => {
+        m.activeZone = z;
+        sfx('click');
+        renderMechInteraction(mech, m);
+      });
+      zonesEl.appendChild(zoneBtn);
+    });
+    zone.appendChild(zonesEl);
+
+    const sum = m.zones.reduce((a, b) => a + b, 0);
+    const actions = $('#mech-actions');
+    actions.innerHTML = '';
+    actions.appendChild(mechButton(MECH_PLACE_LABELS.distribute, true, placeMaterial,
+      mechInv(mech) <= 0 || sum >= mech.total, 'btn-mech-place'));
+    actions.appendChild(mechButton(MECH_TAKE_LABELS.distribute, false, takeMaterial, m.zones[m.activeZone] <= 0, 'btn-mech-take'));
+
+    if (feedback === 'uneven') setMechFeedback('桥还歪着…调整下', true);
+    else setMechFeedback(`已铺 ${sum} / ${mech.total}`, false);
+  }
+
+  // ---------- balance：双盘配平，横梁实时倾斜 ----------
+  function renderBalanceInteract(mech, m) {
+    const zone = $('#mech-interaction');
+    zone.innerHTML = '';
+    const tilt = Math.max(-16, Math.min(16, (mech.leftStart - m.placed) * 4));
+    const beam = document.createElement('div');
+    beam.className = 'mech-beam';
+    beam.style.transform = `rotate(${tilt}deg)`;
+    beam.innerHTML = `<span class="mech-pan">${mech.itemEmoji.repeat(mech.leftStart)}<small>左 ${mech.leftStart}</small></span>` +
+      `<span class="mech-pivot">⚖️</span>` +
+      `<span class="mech-pan">${mech.itemEmoji.repeat(m.placed) || '◌'}<small>右 ${m.placed}</small></span>`;
+    zone.appendChild(beam);
+
+    const actions = $('#mech-actions');
+    actions.innerHTML = '';
+    actions.appendChild(mechButton(MECH_PLACE_LABELS.balance, true, placeMaterial,
+      mechInv(mech) <= 0 || m.placed >= mech.leftStart + 3, 'btn-mech-place'));
+    actions.appendChild(mechButton(MECH_TAKE_LABELS.balance, false, takeMaterial, m.placed <= 0, 'btn-mech-take'));
+    setMechFeedback(m.placed === mech.leftStart ? '平衡了！' : `左 ${mech.leftStart} · 右 ${m.placed}`, false);
   }
 
   function commitEstimate() {
@@ -2803,21 +3029,44 @@ window.addEventListener('unhandledrejection', function(e) {
     if (!mech || !m || m.estimate !== null) return;
     m.estimate = m.estimateValue || 5;
     sfx('click');
-    trackEvent('mechanism_estimate', { id: mech.id, estimate: m.estimate, need: mech.need });
+    trackEvent('mechanism_estimate', { id: mech.id, estimate: m.estimate, target: mech.estimateTarget });
     renderMechanism();
-    showHint(m.estimate === mech.need ? '先猜再想，很好！放进去验证吧' : '猜完啦？放进去验证吧');
+    showHint('猜完啦？放进去验证吧');
   }
 
   function placeMaterial() {
     const mech = MECHANISMS[session.mechanism?.id];
     const m = session.mechanism;
-    if (!mech || !m || m.resolved || mech.restored()) return;
-    const inv = state.materials[mech.material] || 0;
-    if (inv <= 0 || m.filled >= mech.need + 3) return;
-    state.materials[mech.material] = inv - 1;
-    m.filled++;
+    if (!mech || !m || m.resolved || mech.restored() || mechInv(mech) <= 0) return;
     sfx('click');
-    renderMechSlots(mech, m);
+    if (mech.type === 'fill' || mech.type === 'fillTo') {
+      if ((mech.start || 0) + m.placed >= mech.need + 2) return;
+      state.materials[mech.material]--;
+      m.placed++;
+      renderMechInteraction(mech, m);
+    } else if (mech.type === 'grid') {
+      const index = m.placedCells.indexOf(false);
+      if (index === -1) return;
+      state.materials[mech.material]--;
+      m.placedCells[index] = true;
+      renderMechInteraction(mech, m);
+      // 行列结构即时反馈：刚安满一行就报一次"每行×行数"
+      const placedCount = m.placedCells.filter(Boolean).length;
+      if (placedCount % mech.cols === 0) {
+        setMechFeedback(`${mech.cols} × ${placedCount / mech.cols} = ${placedCount}`, false);
+      }
+    } else if (mech.type === 'distribute') {
+      const sum = m.zones.reduce((a, b) => a + b, 0);
+      if (sum >= mech.total) return;
+      state.materials[mech.material]--;
+      m.zones[m.activeZone]++;
+      checkDistribute(mech, m);
+    } else if (mech.type === 'balance') {
+      if (m.placed >= mech.leftStart + 3) return;
+      state.materials[mech.material]--;
+      m.placed++;
+      checkBalance(mech, m);
+    }
     updateMapHud();
     saveGame();
   }
@@ -2825,21 +3074,50 @@ window.addEventListener('unhandledrejection', function(e) {
   function takeMaterial() {
     const mech = MECHANISMS[session.mechanism?.id];
     const m = session.mechanism;
-    if (!mech || !m || m.resolved || m.filled <= 0 || mech.restored()) return;
-    m.filled--;
-    state.materials[mech.material] = (state.materials[mech.material] || 0) + 1;
+    if (!mech || !m || m.resolved || mech.restored()) return;
     sfx('click');
-    renderMechSlots(mech, m);
+    if (mech.type === 'fill' || mech.type === 'fillTo') {
+      if (m.placed <= 0) return;
+      m.placed--;
+      state.materials[mech.material]++;
+      renderMechInteraction(mech, m);
+    } else if (mech.type === 'grid') {
+      const index = m.placedCells.lastIndexOf(true);
+      if (index === -1) return;
+      m.placedCells[index] = false;
+      state.materials[mech.material]++;
+      renderMechInteraction(mech, m);
+    } else if (mech.type === 'distribute') {
+      if (m.zones[m.activeZone] <= 0) return;
+      m.zones[m.activeZone]--;
+      state.materials[mech.material]++;
+      checkDistribute(mech, m, true);
+    } else if (mech.type === 'balance') {
+      if (m.placed <= 0) return;
+      m.placed--;
+      state.materials[mech.material]++;
+      checkBalance(mech, m);
+    }
     updateMapHud();
     saveGame();
   }
 
-  // 孩子主动检验：风车启动，物理反馈"不够/正好/太多"
+  // 孩子主动检验（fill/fillTo/grid）：物理反馈"不够/正好/太多"
   function verifyMechanism() {
     const mech = MECHANISMS[session.mechanism?.id];
     const m = session.mechanism;
     if (!mech || !m || m.resolved || mech.restored()) return;
-    if (m.filled === mech.need) {
+    let ok = false;
+    let short = true;
+    if (mech.type === 'fill' || mech.type === 'fillTo') {
+      const placedTotal = (mech.start || 0) + m.placed;
+      ok = placedTotal === mech.need;
+      short = placedTotal < mech.need;
+    } else if (mech.type === 'grid') {
+      ok = m.placedCells.every(Boolean);
+      short = true;
+    }
+    if (ok) {
       updateMapHud();
       saveGame();
       resolveMechanismSuccess(mech, m);
@@ -2847,40 +3125,72 @@ window.addEventListener('unhandledrejection', function(e) {
     }
     m.failCount++;
     sfx('wrong');
-    const blades = $('#mech-blades');
-    blades.classList.remove('wobble');
-    void blades.offsetWidth;
-    blades.classList.add('wobble');
-    const short = m.filled < mech.need;
-    renderMechSlots(mech, m, short ? 'short' : 'over');
-    trackEvent(short ? 'mechanism_short' : 'mechanism_over', { id: mech.id, filled: m.filled, need: mech.need });
+    mechWobble();
+    renderMechInteraction(mech, m);
+    if (mech.type === 'grid') renderGridInteract(mech, m, 'short');
+    else renderFillInteract(mech, m, short ? 'short' : 'over');
+    trackEvent(short ? 'mechanism_short' : 'mechanism_over', { id: mech.id, need: mech.need });
   }
 
-  // 成功：叶片转动 + 符号定格 + 估算对照，然后走关卡完成链路
+  // distribute 实时检验：全部铺完且均分 → 成功；桥面随时按差值倾斜
+  function checkDistribute(mech, m, fromUndo = false) {
+    const sum = m.zones.reduce((a, b) => a + b, 0);
+    if (sum === mech.total) {
+      const per = mech.total / m.zones.length;
+      if (m.zones.every(count => count === per)) {
+        updateMapHud();
+        saveGame();
+        resolveMechanismSuccess(mech, m);
+        return;
+      }
+      if (!fromUndo) {
+        m.failCount++;
+        sfx('wrong');
+        mechWobble();
+      }
+      renderDistributeInteract(mech, m, 'uneven');
+      trackEvent('mechanism_uneven', { id: mech.id, zones: [...m.zones] });
+      return;
+    }
+    renderMechInteraction(mech, m);
+  }
+
+  // balance 实时检验：左右相等 → 成功
+  function checkBalance(mech, m) {
+    if (m.placed === mech.leftStart) {
+      updateMapHud();
+      saveGame();
+      resolveMechanismSuccess(mech, m);
+      return;
+    }
+    renderMechInteraction(mech, m);
+  }
+
+  // 成功：实体点亮 + 符号定格 + 估算对照，然后走关卡完成链路
   function resolveMechanismSuccess(mech, m) {
     if (m.resolved) return;
     m.resolved = true;
     sfx('win');
-    renderMechSlots(mech, m);
-    const blades = $('#mech-blades');
-    blades.classList.add('spinning');
+    renderMechInteraction(mech, m);
+    const sub = $('#mech-entity-sub');
+    sub.classList.add('spinning', 'lit');
     const freeze = $('#mech-symbol-freeze');
     freeze.innerHTML = mech.symbols.join('<br>');
     freeze.classList.remove('hidden');
+    const estErr = m.estimate === null ? 99 : Math.abs(m.estimate - (mech.estimateTarget ?? 0));
     trackEvent('mechanism_success', {
       id: mech.id,
       estimate: m.estimate,
-      need: mech.need,
-      estimateError: Math.abs((m.estimate ?? mech.need) - mech.need),
+      target: mech.estimateTarget,
+      estimateError: estErr,
       failCount: m.failCount
     });
     setTimeout(() => {
       closeMechanism();
-      const estErr = Math.abs((m.estimate ?? mech.need) - mech.need);
       if (m.estimate !== null) {
         showHint(estErr <= 1
-          ? `你猜 ${m.estimate} 颗，正好 ${mech.need} 颗，估得真准！`
-          : `你猜 ${m.estimate} 颗，实际需要 ${mech.need} 颗。下次先估再试！`, 3000);
+          ? `你猜 ${m.estimate}，正好 ${mech.estimateTarget}，估得真准！`
+          : `你猜 ${m.estimate}，实际需要 ${mech.estimateTarget}。下次先估再试！`, 3000);
       }
       finishMechanism(mech, m);
     }, 1800);
@@ -2888,11 +3198,12 @@ window.addEventListener('unhandledrejection', function(e) {
 
   // 机关完成 → 复用关卡完成链路（星级、奖励、世界变化、成就、任务）
   function finishMechanism(mech, m) {
-    const level = LEVELS.flat().find(item => item.id === mech.levelId);
+    const regionId = LEVELS.findIndex(list => list.some(item => item.id === mech.levelId));
+    const level = regionId >= 0 ? LEVELS[regionId].find(item => item.id === mech.levelId) : null;
     if (!level) return;
-    const region = REGIONS[0];
+    const region = REGIONS[regionId];
     const firstClear = !state.player.completedLevels.includes(level.id);
-    const estErr = m.estimate === null ? 99 : Math.abs(m.estimate - mech.need);
+    const estErr = m.estimate === null ? 99 : Math.abs(m.estimate - (mech.estimateTarget ?? 0));
     const independentCorrect = (m.failCount === 0 ? 1 : 0) + (estErr <= 1 ? 1 : 0);
     const starsThisRun = Learning.calculateStars({
       questionCount: 2,
@@ -2915,11 +3226,11 @@ window.addEventListener('unhandledrejection', function(e) {
       state.player.completedLevels.push(level.id);
       levelsGained = grantRewards(rewards);
     }
-    const allCompleted = LEVELS[0].every(item => state.player.completedLevels.includes(item.id));
+    const allCompleted = LEVELS[regionId].every(item => state.player.completedLevels.includes(item.id));
     let newlyUnlockedRegion = null;
-    if (allCompleted && !state.player.unlockedRegions.includes(1)) {
-      state.player.unlockedRegions.push(1);
-      newlyUnlockedRegion = 1;
+    if (allCompleted && regionId < REGIONS.length - 1 && !state.player.unlockedRegions.includes(regionId + 1)) {
+      state.player.unlockedRegions.push(regionId + 1);
+      newlyUnlockedRegion = regionId + 1;
     }
     checkAchievements();
     saveGame();
@@ -3376,7 +3687,7 @@ window.addEventListener('unhandledrejection', function(e) {
         <div class="level-info">
           <div class="level-name">${lv.name}</div>
           <div class="level-desc">${lv.desc}</div>
-          ${checkpoint && !completed ? `<div class="level-checkpoint">继续上次：${missionPhaseName(checkpoint.phase)}</div>` : ''}
+          ${checkpoint ? `<div class="level-checkpoint">继续上次：${missionPhaseName(checkpoint.phase)}</div>` : ''}
         </div>
         <div class="level-stars">${stars}</div>
       `;
@@ -3452,23 +3763,20 @@ window.addEventListener('unhandledrejection', function(e) {
     trackEvent('level_start', { levelId: level.id, region: rid });
 
     const mission = Learning.WIND_MISSIONS[level.id];
-    // 0-0 已改造为地图实体机关：不再打开任务卡，引导孩子去风车前修复
-    if (level.id === '0-0') {
-      if (state.map.worldChanges.windmillRestored) {
-        showHint('风车已经修好啦！去挑战后面的关卡吧');
-        return;
-      }
+    // 机关化关卡：未完成时不再打开任务卡，引导孩子去地图上的实体机关
+    const mechForLevel = Object.values(MECHANISMS).find(item => item.levelId === level.id);
+    if (mechForLevel && !state.player.completedLevels.includes(level.id)) {
       showScreen('world-map');
       renderMap();
-      session.playerX = 1500;
-      session.playerY = 2560;
+      session.playerX = Math.max(60, mechForLevel.x - 140);
+      session.playerY = Math.min(WORLD.H - 60, mechForLevel.y + 150);
       session.targetX = session.playerX;
       session.targetY = session.playerY;
       session.isMoving = false;
       session.moveMode = null;
       updatePlayerSprite();
       updateCamera();
-      showHint('去风车前修复它！先收集周围的 🍃 风种', 3000);
+      showHint(`去${mechForLevel.title}${mechForLevel.actionLabel}它！先收集周围材料`, 3000);
       trackEvent('mechanism_guide', { levelId: level.id });
       return;
     }

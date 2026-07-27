@@ -2146,10 +2146,19 @@ html, body {
   transition: filter 0.8s, opacity 0.8s, transform 0.8s;
   pointer-events: none;
 }
-/* 机关实体需要可点：风车是数学机关的入口 */
-#windmill-change {
+/* 机关实体需要可点：风车、风核、灯塔、风桥、风暴核心都是数学机关的入口 */
+#windmill-change,
+.mech-entity {
   pointer-events: auto;
   cursor: pointer;
+}
+.mech-entity-icon {
+  font-size: 46px;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+}
+.world-change.lit { filter: none; opacity: 1; }
+.world-change.lit .mech-entity-icon {
+  filter: drop-shadow(0 0 16px rgba(116,194,168,0.9));
 }
 .repair-badge {
   position: absolute;
@@ -4511,3 +4520,125 @@ html.reduced-motion *::after {
   60% { transform: scale(1.15); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
 }
+
+
+/* ========== 机关面板：多类型交互区 ========== */
+.mech-entity-emoji { font-size: 58px; line-height: 96px; }
+.mech-entity-sub {
+  position: absolute;
+  top: 6px; left: 50%;
+  transform: translateX(-50%);
+  font-size: 40px;
+  color: var(--element-anemo);
+  text-shadow: 0 0 14px rgba(116,194,168,0.8);
+  transition: filter 0.3s;
+}
+.mech-entity-sub.lit { filter: drop-shadow(0 0 18px rgba(126,231,135,0.95)); }
+.mech-entity-sub.spinning { animation: blades-spin 0.8s linear infinite; }
+.mech-entity-sub.wobble { animation: blades-wobble 0.5s ease-in-out; }
+
+.mech-interaction {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+/* fill/fillTo 槽位（沿用 .mech-slot，新增锁定初始量） */
+.mech-slots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mech-slot.prefilled {
+  border-style: solid;
+  border-color: var(--gold-dark);
+  background: rgba(232,212,154,0.18);
+  opacity: 0.85;
+}
+
+/* grid 行列 */
+.mech-grid {
+  display: grid;
+  gap: 7px;
+  justify-content: center;
+}
+.mech-grid-cell {
+  width: 48px; height: 48px;
+  font-size: 24px;
+  border: 2px dashed rgba(232,212,154,0.4);
+  border-radius: 10px;
+  background: rgba(17,24,39,0.6);
+  display: flex; align-items: center; justify-content: center;
+}
+.mech-grid-cell.filled {
+  border-style: solid;
+  border-color: var(--element-anemo);
+  background: rgba(116,194,168,0.2);
+}
+.mech-grid-cell.empty-glow {
+  border-color: var(--danger);
+  animation: slot-glow 0.8s infinite;
+}
+.mech-grid-counter {
+  font-size: 15px; font-weight: 800;
+  color: var(--gold-light);
+}
+
+/* distribute 桥面与桥段 */
+.mech-bridge {
+  font-size: 52px;
+  transition: transform 0.35s ease;
+  transform-origin: center 80%;
+}
+.mech-zones {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.mech-zone {
+  min-width: 96px;
+  padding: 10px 12px;
+  border: 2px dashed rgba(232,212,154,0.45);
+  border-radius: 12px;
+  background: rgba(17,24,39,0.55);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.mech-zone.active {
+  border-style: solid;
+  border-color: var(--element-anemo);
+  background: rgba(116,194,168,0.12);
+  box-shadow: 0 0 10px rgba(116,194,168,0.4);
+}
+.mech-zone strong { color: var(--element-anemo); letter-spacing: 1px; }
+.mech-zone span { font-size: 11px; color: var(--text-dim); }
+
+/* balance 天平横梁 */
+.mech-beam {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 14px;
+  min-height: 84px;
+  font-size: 26px;
+  transition: transform 0.35s ease;
+  transform-origin: center bottom;
+  padding: 0 8px;
+}
+.mech-pan {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 90px;
+  padding: 8px;
+  border-bottom: 3px solid var(--gold-dark);
+}
+.mech-pan small { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+.mech-pivot { font-size: 34px; }
