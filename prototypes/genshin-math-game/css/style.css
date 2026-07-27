@@ -2141,11 +2141,33 @@ html, body {
   position: absolute;
   z-index: 4;
   text-align: center;
-  filter: grayscale(0.9) brightness(0.65);
-  opacity: 0.72;
+  filter: grayscale(0.45) brightness(0.92);
+  opacity: 0.92;
   transition: filter 0.8s, opacity 0.8s, transform 0.8s;
   pointer-events: none;
 }
+/* 机关实体需要可点：风车是数学机关的入口 */
+#windmill-change {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.repair-badge {
+  position: absolute;
+  top: -18px; right: -10px;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: var(--gold);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  box-shadow: 0 0 12px rgba(232,212,154,0.9);
+  animation: repair-pulse 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes repair-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 8px rgba(232,212,154,0.7); }
+  50% { transform: scale(1.18); box-shadow: 0 0 20px rgba(232,212,154,1); }
+}
+.world-change.restored .repair-badge { display: none; }
 .world-change-label {
   padding: 2px 7px;
   border-radius: 999px;

@@ -66,7 +66,7 @@ window.addEventListener('unhandledrejection', function(e) {
       id: 'windmill',
       levelId: '0-0',
       elementId: 'windmill-change',
-      x: 1640, y: 2420, radius: 130,
+      x: 1640, y: 2420, radius: 170,
       title: '沉睡的风车',
       material: 'windSeed',
       itemEmoji: '🍃', slotEmoji: '🌀',
@@ -1387,7 +1387,19 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#btn-mechanism-close')?.addEventListener('click', closeMechanism);
     $('#windmill-change')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (session.currentMechanism === 'windmill') openMechanism('windmill');
+      if (!session.mapActive || session.controlsLocked) return;
+      if (session.currentMechanism === 'windmill') {
+        openMechanism('windmill');
+      } else {
+        // 远处点风车：自动走到机关旁边（原神式点击寻路）。
+        // 注意顺序：showHint 会短暂锁控制并重置移动目标，必须先提示再设寻路。
+        const mech = MECHANISMS.windmill;
+        showHint('正在走向风车…', 1500);
+        session.targetX = mech.x;
+        session.targetY = mech.y + 140;
+        session.isMoving = true;
+        session.moveMode = 'target';
+      }
     });
   }
 
