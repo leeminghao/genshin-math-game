@@ -33,7 +33,7 @@ window.addEventListener('unhandledrejection', function(e) {
   ];
 
   // 开放世界尺寸与布局（WORLD_LAYOUT 在 data.js 中定义，加载失败时退化为裸尺寸常量）
-  const WORLD = { W: 8000, H: 5000 };
+  const WORLD = { W: 10000, H: 6000 };
   const LAYOUT = typeof WORLD_LAYOUT !== 'undefined' ? WORLD_LAYOUT : null;
   const COSMETICS = [
     { id: 'default', name: '旅行微光', emoji: '· · ·', cost: 0, className: '' },
@@ -46,10 +46,13 @@ window.addEventListener('unhandledrejection', function(e) {
   // 设计约束：武器不改变"必须答对全部题目才能获胜"的学习约束，只增强生存与表现。
   const WEAPONS = [
     { id: 'wooden', name: '木枝短剑', emoji: '🗡️', cost: 0, attackBonus: 5, desc: '旅行者的第一把武器' },
+    { id: 'breeze', name: '风旅轻剑', emoji: '🍃', cost: 30, attackBonus: 7, desc: '轻得像一阵风' },
     { id: 'wind', name: '风灵之剑', emoji: '⚔️', cost: 60, attackBonus: 10, desc: '轻盈如风，出手更快' },
     { id: 'rock', name: '岩心重锤', emoji: '🔨', cost: 100, attackBonus: 15, desc: '沉稳有力，震慑强敌' },
+    { id: 'starshort', name: '星辉短刃', emoji: '🔪', cost: 130, attackBonus: 18, desc: '映着星光的短刃' },
     { id: 'thunder', name: '雷鸣长枪', emoji: '🔱', cost: 160, attackBonus: 20, desc: '雷电附着的锋利枪尖' },
     { id: 'forest', name: '森语法杖', emoji: '🪄', cost: 220, attackBonus: 25, desc: '凝聚森林智慧的法杖' },
+    { id: 'stormaxe', name: '风暴战斧', emoji: '🪓', cost: 260, attackBonus: 28, desc: '挥动时带着雷鸣' },
     { id: 'water', name: '澄水晶弓', emoji: '🏹', cost: 300, attackBonus: 30, desc: '澄澈水元素凝成的长弓' },
     { id: 'flame', name: '赤焰大剑', emoji: '🗡️', cost: 400, attackBonus: 40, desc: '燃烧着赤焰的双手大剑' },
     { id: 'snow', name: '雪境圣剑', emoji: '⚔️', cost: 520, attackBonus: 50, desc: '传说中的终极武器' }
@@ -64,6 +67,20 @@ window.addEventListener('unhandledrejection', function(e) {
     { id: 'cloth', name: '新手布衣', emoji: '🧥', cost: 0, defenseBonus: 2, desc: '旅行者的第一件防具' },
     { id: 'leather', name: '风旅皮甲', emoji: '🥋', cost: 60, defenseBonus: 4, desc: '轻便结实的皮甲' },
     { id: 'rockmail', name: '岩心铠甲', emoji: '🛡️', cost: 140, defenseBonus: 7, desc: '岩岚港工匠的杰作' }
+  ];
+  // 主动战斗技能：钻石购买的纯战斗增益，每场战斗限用一次；提示类元素技能永远免费
+  const ACTIVE_SKILLS = [
+    { id: 'gustStun', name: '风压震慑', emoji: '💨', cost: 80, desc: '震慑怪物，它的下一次反击落空' },
+    { id: 'healWave', name: '治疗波动', emoji: '💚', cost: 100, desc: '立即恢复 30 点生命' },
+    { id: 'chargeHit', name: '蓄势打击', emoji: '🔥', cost: 120, desc: '接下来 2 题答对能量翻倍' }
+  ];
+  // 材料兑换汇率：1 材料 = 2 钻石（保守，防止刷崩商店经济）
+  const MATERIAL_SELL_RATE = 2;
+  const MATERIAL_INFO = [
+    { id: 'windSeed', name: '风种', emoji: '🍃' },
+    { id: 'windLamp', name: '风灯', emoji: '🏮' },
+    { id: 'plank', name: '木板', emoji: '🪵' },
+    { id: 'windCrystal', name: '风压晶', emoji: '🔮' }
   ];
 
   // 填充式机关：地图上的数学实体。收集材料 → 估算数量 → 投放 → 物理反馈（不够/正好/多了/歪了）→ 符号定格
@@ -295,7 +312,8 @@ window.addEventListener('unhandledrejection', function(e) {
     inventory: {
       weapons: ['wooden'],
       armors: ['cloth'],
-      consumables: { potion: 0, shield: 0, scroll: 0 }
+      consumables: { potion: 0, shield: 0, scroll: 0 },
+      activeSkills: []
     },
     equipment: {
       weapon: 'wooden',
@@ -449,6 +467,7 @@ window.addEventListener('unhandledrejection', function(e) {
     weaponStrikeUsed: false,   // 武器技能每场战斗一次
     itemShield: false,         // 护盾符文：抵挡一次怪物攻击
     enemyStunned: false,       // 弱点破防/武器震慑：怪物下一次攻击无效
+    usedActiveSkills: [],      // 本场战斗已用的主动技能
     // 填充式机关会话状态（不持久化）
     currentMechanism: null,
     mechanism: null            // { id, estimate, filled, failCount, resolved }
@@ -629,7 +648,7 @@ window.addEventListener('unhandledrejection', function(e) {
     const rawCosmetics = isPlainObject(rawState.cosmetics) ? rawState.cosmetics : {};
     const validLevelIds = new Set(LEVELS.flat().map(level => level.id));
     const validStoryIds = new Set(Object.keys(STORY_TRIGGERS));
-    const validAreaIds = new Set(['forest-clearing', 'mountain-peak', 'desert-oasis', 'swamp-secret']);
+    const validAreaIds = new Set(['forest-clearing', 'mountain-peak', 'desert-oasis', 'swamp-secret', 'star-meadow-secret', 'echo-cave-secret']);
 
     normalized.player.name = typeof rawPlayer.name === 'string' && rawPlayer.name.trim()
       ? rawPlayer.name.slice(0, 24)
@@ -666,7 +685,7 @@ window.addEventListener('unhandledrejection', function(e) {
     normalized.map.openedChests = uniqueValues(rawMap.openedChests, Number.isInteger).filter(value => value >= 0);
     normalized.map.activatedWaypoints = uniqueValues(
       rawMap.activatedWaypoints,
-      value => Number.isInteger(value) && value >= 0 && value < REGIONS.length
+      value => Number.isInteger(value) && value >= 0 && value < (LAYOUT?.waypoints?.length ?? 16)
     );
     normalized.map.seenStories = uniqueValues(rawMap.seenStories, value => validStoryIds.has(value));
     normalized.map.discoveredAreas = uniqueValues(rawMap.discoveredAreas, value => validAreaIds.has(value));
@@ -713,6 +732,8 @@ window.addEventListener('unhandledrejection', function(e) {
     if (!normalized.inventory.weapons.includes('wooden')) normalized.inventory.weapons.unshift('wooden');
     normalized.inventory.armors = uniqueValues(rawInventory.armors, value => validArmorIds.has(value));
     if (!normalized.inventory.armors.includes('cloth')) normalized.inventory.armors.unshift('cloth');
+    const validActiveSkillIds = new Set(ACTIVE_SKILLS.map(item => item.id));
+    normalized.inventory.activeSkills = uniqueValues(rawInventory.activeSkills, value => validActiveSkillIds.has(value));
     const rawConsumables = isPlainObject(rawInventory.consumables) ? rawInventory.consumables : {};
     Object.entries(rawConsumables).forEach(([id, count]) => {
       if (validConsumableIds.has(id)) {
@@ -821,6 +842,7 @@ window.addEventListener('unhandledrejection', function(e) {
       weaponStrikeUsed: false,
       itemShield: false,
       enemyStunned: false,
+      usedActiveSkills: [],
       currentMechanism: null,
       mechanism: null
     });
@@ -1453,6 +1475,9 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#use-potion-btn')?.addEventListener('click', () => useConsumable('potion'));
     $('#use-shield-btn')?.addEventListener('click', () => useConsumable('shield'));
     $('#use-scroll-btn')?.addEventListener('click', () => useConsumable('scroll'));
+    ACTIVE_SKILLS.forEach(skill => {
+      $(`#active-skill-${skill.id}`)?.addEventListener('click', () => useActiveSkill(skill.id));
+    });
 
     // 填充式机关：面板按钮与风车实体点击
     $('#estimate-minus')?.addEventListener('click', () => {
@@ -1702,6 +1727,66 @@ window.addEventListener('unhandledrejection', function(e) {
           }
           if (isWeapon) state.equipment.weapon = gear.id;
           else state.equipment.armor = gear.id;
+          updateMapHud();
+          saveGame();
+          renderShop();
+        });
+        item.appendChild(button);
+        list.appendChild(item);
+      });
+    } else if (shopActiveTab === 'skills') {
+      ACTIVE_SKILLS.forEach(skill => {
+        const owned = state.inventory.activeSkills.includes(skill.id);
+        const item = document.createElement('div');
+        item.className = 'shop-item' + (owned ? ' equipped' : '');
+        item.innerHTML = `
+          <div class="shop-item-icon">${skill.emoji}</div>
+          <div class="shop-item-name">${skill.name}</div>
+          <div class="shop-item-desc">${skill.desc}</div>
+          <div class="shop-item-stat">每场战斗限用 1 次</div>
+        `;
+        const button = document.createElement('button');
+        button.className = 'genshin-btn small' + (owned ? ' primary' : '');
+        button.textContent = owned ? '已学会' : `学习 ${skill.cost} 💎`;
+        button.disabled = owned || state.player.gems < skill.cost;
+        button.addEventListener('click', () => {
+          if (state.player.gems < skill.cost) {
+            showHint(`还需要 ${skill.cost - state.player.gems} 钻石才能学习「${skill.name}」。`);
+            return;
+          }
+          state.player.gems -= skill.cost;
+          state.inventory.activeSkills.push(skill.id);
+          sfx('collect');
+          showHint(`${skill.emoji} 学会「${skill.name}」！战斗中可以使用。`);
+          trackEvent('shop_buy_skill', { id: skill.id, cost: skill.cost });
+          updateMapHud();
+          saveGame();
+          renderShop();
+        });
+        item.appendChild(button);
+        list.appendChild(item);
+      });
+    } else if (shopActiveTab === 'exchange') {
+      MATERIAL_INFO.forEach(mat => {
+        const count = state.materials[mat.id] || 0;
+        const item = document.createElement('div');
+        item.className = 'shop-item';
+        item.innerHTML = `
+          <div class="shop-item-icon">${mat.emoji}</div>
+          <div class="shop-item-name">${mat.name}</div>
+          <div class="shop-item-desc">修机关剩下的材料，可以换成钻石</div>
+          <div class="shop-owned-count">已拥有 ×${count}</div>
+        `;
+        const button = document.createElement('button');
+        button.className = 'genshin-btn small';
+        button.textContent = `卖 1 个 (+${MATERIAL_SELL_RATE} 💎)`;
+        button.disabled = count <= 0;
+        button.addEventListener('click', () => {
+          if ((state.materials[mat.id] || 0) <= 0) return;
+          state.materials[mat.id]--;
+          state.player.gems += MATERIAL_SELL_RATE;
+          sfx('collect');
+          trackEvent('shop_sell_material', { id: mat.id, rate: MATERIAL_SELL_RATE });
           updateMapHud();
           saveGame();
           renderShop();
@@ -3382,7 +3467,9 @@ window.addEventListener('unhandledrejection', function(e) {
       'forest-clearing': '林间空地',
       'mountain-peak': '群山之巅',
       'desert-oasis': '荒漠绿洲',
-      'swamp-secret': '沼泽秘境'
+      'swamp-secret': '沼泽秘境',
+      'star-meadow-secret': '星屑秘境',
+      'echo-cave-secret': '回声密室'
     };
     if (!Array.isArray(state.map.discoveredAreas)) state.map.discoveredAreas = [];
     $$('.hidden-area').forEach(area => {
@@ -3767,6 +3854,7 @@ window.addEventListener('unhandledrejection', function(e) {
     session.weaponStrikeUsed = false;
     session.itemShield = false;
     session.enemyStunned = false;
+    session.usedActiveSkills = [];
 
     // 使用动态生成的题目（如果有），否则用静态题目
     let questions = null;
@@ -4827,6 +4915,15 @@ window.addEventListener('unhandledrejection', function(e) {
       if (countEl) countEl.textContent = count;
       btn.disabled = count <= 0;
     });
+    // 主动技能：已学习的显示，用过的禁用
+    ACTIVE_SKILLS.forEach(skill => {
+      const btn = $(`#active-skill-${skill.id}`);
+      if (!btn) return;
+      const owned = state.inventory.activeSkills.includes(skill.id);
+      btn.classList.toggle('hidden', !owned);
+      btn.disabled = !owned || session.usedActiveSkills.includes(skill.id);
+      btn.classList.toggle('used', session.usedActiveSkills.includes(skill.id));
+    });
   }
 
   // 弱点题：每场战斗中间那道题为怪物弱点，答对可"破防"震慑怪物
@@ -5305,9 +5402,34 @@ window.addEventListener('unhandledrejection', function(e) {
     updateHud();
   }
 
+  // 使用主动战斗技能：商店购买，每场战斗限一次
+  function useActiveSkill(id) {
+    if (session.usedActiveSkills.includes(id)) return;
+    if (!state.inventory.activeSkills.includes(id)) return;
+    const skill = ACTIVE_SKILLS.find(item => item.id === id);
+    if (!skill) return;
+    session.usedActiveSkills.push(id);
+    if (id === 'gustStun') {
+      session.enemyStunned = true;
+      sfx('burst');
+      showStunOverlay('💨 风压震慑！怪物反击落空');
+      $('#enemy-sprite').classList.add('stunned');
+    } else if (id === 'healWave') {
+      state.player.hp = Math.min(getEffectiveMaxHp(), state.player.hp + 30);
+      sfx('correct');
+      showHint('💚 治疗波动：恢复 30 点生命！');
+    } else if (id === 'chargeHit') {
+      session.buffDoubleEnergy += 2;
+      sfx('burst');
+      showHint('🔥 蓄势打击：接下来 2 题答对能量翻倍！');
+    }
+    trackEvent('active_skill_use', { id, levelId: session.currentLevel?.id });
+    updateHud();
+    saveGame();
+  }
+
   // 使用消耗品：生命药水 / 护盾符文 / 智慧卷轴
-  function useConsumable(id) {
-    if ((state.inventory.consumables[id] || 0) <= 0) return;
+  function useConsumable(id) {    if ((state.inventory.consumables[id] || 0) <= 0) return;
     const goods = CONSUMABLES.find(item => item.id === id);
     if (!goods) return;
     state.inventory.consumables[id]--;

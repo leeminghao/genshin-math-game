@@ -886,6 +886,31 @@ try {
   })()`);
   assert.deepEqual(report.reachability, [], '存在不可达收集品: ' + report.reachability.join(','));
 
+  stage('新子区域：星屑草原与回声峡谷可探索');
+  await fresh();
+  // 传送到星屑草原：能捡水晶、能激活新传送点
+  const gemsBefore = await evaluate('window.__game.state.player.gems');
+  await evaluate(`Object.assign(window.__game.session,{
+    playerX:8400,playerY:2000,targetX:8400,targetY:2000,isMoving:false,moveMode:null
+  });window.__game.updatePlayerSprite()`);
+  await sleep(600);
+  assert.ok(await evaluate('window.__game.state.map.collectedItems.length') >= 1, '星屑草原应能捡到水晶');
+  assert.ok(await evaluate('window.__game.state.player.gems') > gemsBefore, '捡水晶应加钻石');
+  await evaluate(`Object.assign(window.__game.session,{
+    playerX:8800,playerY:2200,targetX:8800,targetY:2200,isMoving:false,moveMode:null
+  });window.__game.updatePlayerSprite()`);
+  await sleep(3200); // 拾取提示期间 controlsLocked=true，等提示关闭后接近检测才运行
+  assert.equal(await evaluate('window.__game.session.currentWaypoint'), 8, '应靠近星屑草场传送点');
+  await evaluate('document.querySelector("#btn-activate-waypoint").click()');
+  assert.ok(await evaluate('window.__game.state.map.activatedWaypoints.includes(8)'), '星屑草场传送点应可激活');
+  // 回声峡谷：世界边界扩大后可到达
+  await evaluate(`Object.assign(window.__game.session,{
+    playerX:5000,playerY:5400,targetX:5000,targetY:5400,isMoving:false,moveMode:null
+  });window.__game.updatePlayerSprite()`);
+  await sleep(3200);
+  assert.equal(await evaluate('window.__game.session.currentWaypoint'), 9, '应靠近回声谷口传送点');
+  report.newAreas = { waypoint8: true, waypoint9: true };
+
   stage('移动端地图与任务台边界');
   await send('Emulation.setDeviceMetricsOverride', {
     width: 390, height: 844, deviceScaleFactor: 1, mobile: true

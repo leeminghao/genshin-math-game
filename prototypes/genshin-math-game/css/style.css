@@ -821,7 +821,7 @@ html, body {
 .world-canvas {
   position: absolute;
   top: 0; left: 0;
-  width: 8000px; height: 5000px;
+  width: 10000px; height: 6000px;
   will-change: transform;
 }
 .terrain {
