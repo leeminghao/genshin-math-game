@@ -416,7 +416,7 @@ try {
   await sleep(3600); // 引导提示期间 controlsLocked=true，等提示关闭后收集检测才会运行
   report.materials = await evaluate(`({
     seeds: window.__game.state.materials.windSeed,
-    hud: document.querySelector('#mini-seeds').textContent
+    hud: document.querySelector('#mini-mat-windSeed').textContent
   })`);
   assert.ok(report.materials.seeds >= 1, '靠近风种应自动收集');
   assert.equal(Number(report.materials.hud) >= 1, true, 'HUD 应显示风种数');
@@ -706,6 +706,20 @@ try {
   })()`);
   assert.equal(await evaluate('window.__game.state.inventory.consumables.potion'), 1);
   assert.equal(await evaluate('window.__game.state.player.gems'), 420);
+  // 防具页签：购买风旅皮甲（60）自动装备，防御 7 → 9
+  await evaluate('document.querySelector(\'[data-shop-tab="armor"]\').click()');
+  await evaluate(`(() => {
+    [...document.querySelectorAll('#shop-list .shop-item')]
+      .find(el => el.textContent.includes('风旅皮甲')).querySelector('button').click();
+  })()`);
+  report.armor = await evaluate(`({
+    gems: window.__game.state.player.gems,
+    armor: window.__game.state.equipment.armor,
+    owned: window.__game.state.inventory.armors
+  })`);
+  assert.equal(report.armor.gems, 360);
+  assert.equal(report.armor.armor, 'leather');
+  assert.ok(report.armor.owned.includes('leather'));
   await evaluate('document.querySelector("#btn-close-shop").click()');
   // 进入战斗：敌属性、武器信息、道具计数、武器技能、弱点题、攻防公式
   await evaluate('window.__game.session.mapActive=false;window.__game.startLevel(1,0)');
@@ -733,7 +747,7 @@ try {
     disabled: document.querySelector('#weapon-strike-btn').disabled
   })`);
   assert.deepEqual(report.strike, { used: true, stunned: true, disabled: true });
-  // 答错：震慑抵消一次怪物反击；等重渲染后再答错，反击伤害 = 敌攻16 - 玩家防5 = 11
+  // 答错：震慑抵消一次怪物反击；等重渲染后再答错，反击伤害 = 敌攻16 - 玩家防9(基础5+皮甲4) = 7
   await evaluate(`(() => {
     const q = window.__game.session.currentQuestions[window.__game.session.currentQuestionIndex];
     [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) !== String(q.answer)).click();
@@ -745,7 +759,7 @@ try {
     [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) !== String(q.answer)).click();
   })()`);
   await sleep(120);
-  assert.equal(await evaluate('window.__game.state.player.hp'), report.battleItems.hp - 11, '第二次答错按攻防公式扣血');
+  assert.equal(await evaluate('window.__game.state.player.hp'), report.battleItems.hp - 7, '第二次答错按攻防公式扣血');
   // 生命药水恢复 40（先压低血量，避免顶到上限导致断言失真）
   await evaluate('window.__game.state.player.hp = 30');
   await evaluate('document.querySelector("#use-potion-btn").click()');
@@ -853,6 +867,24 @@ try {
   assert.deepEqual(report.legacy, {
     windmillRestored: true, windcoreLit: true, windtowerLit: true, bridgeOpened: true, stormCalmed: false
   });
+
+  stage('收集品全部可达（屏障不挡拾取）');
+  report.reachability = await evaluate(`(() => {
+    const obs = [...(WORLD_LAYOUT.obstacles || []), ...(WORLD_LAYOUT.sceneryObstacles || [])];
+    const kinds = [['.collectible', 30], ['.chest', 40], ['.material', 42]];
+    const bad = [];
+    kinds.forEach(([sel, collectR]) => {
+      document.querySelectorAll(sel).forEach((el, i) => {
+        const x = parseInt(el.style.left), y = parseInt(el.style.top);
+        obs.forEach(ob => {
+          const d = Math.hypot(x - ob.x, y - ob.y);
+          if (d < ob.r + 24 - collectR) bad.push(sel + '#' + i);
+        });
+      });
+    });
+    return bad;
+  })()`);
+  assert.deepEqual(report.reachability, [], '存在不可达收集品: ' + report.reachability.join(','));
 
   stage('移动端地图与任务台边界');
   await send('Emulation.setDeviceMetricsOverride', {

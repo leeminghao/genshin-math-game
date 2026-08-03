@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <title>数境远征：艾瑟里亚数理冒险</title>
-  <link rel="stylesheet" href="css/style.css?v=5.6">
+  <link rel="stylesheet" href="css/style.css?v=5.7">
 </head>
 <body>
   <div id="app">
@@ -55,7 +55,7 @@
         </div>
         <div class="menu-guide-line"><span class="guide-dot"></span>星芽会陪你观察，答错也可以随时重来。</div>
       </div>
-      <div class="version">2D 开放世界 · 数境大陆 v5.6</div>
+      <div class="version">2D 开放世界 · 数境大陆 v5.7</div>
     </section>
 
     <!-- 三题能力诊断 -->
@@ -262,13 +262,13 @@
   <div class="collectible" data-gem="10" style="left: 3248px; top: 3967px;">💎</div>
   <div class="collectible" data-gem="15" style="left: 2842px; top: 3133px;">💎</div>
   <div class="collectible" data-gem="5" style="left: 4850px; top: 2118px;">💎</div>
-  <div class="collectible" data-gem="10" style="left: 6168px; top: 3862px;">💎</div>
+  <div class="collectible" data-gem="10" style="left: 5825px; top: 3745px;">💎</div>
   <div class="collectible" data-gem="5" style="left: 3911px; top: 1670px;">💎</div>
   <div class="collectible" data-gem="10" style="left: 5603px; top: 2126px;">💎</div>
   <div class="collectible" data-gem="10" style="left: 5323px; top: 2897px;">💎</div>
   <div class="collectible" data-gem="15" style="left: 5626px; top: 3164px;">💎</div>
   <div class="collectible" data-gem="10" style="left: 5460px; top: 1307px;">💎</div>
-  <div class="collectible" data-gem="15" style="left: 5988px; top: 3797px;">💎</div>
+  <div class="collectible" data-gem="15" style="left: 5820px; top: 3820px;">💎</div>
   <div class="collectible" data-gem="5" style="left: 3090px; top: 1318px;">💎</div>
   <div class="collectible" data-gem="5" style="left: 5538px; top: 3278px;">💎</div>
   <div class="chest" data-reward="gems" style="left: 3983px; top: 2937px;">
@@ -455,7 +455,7 @@
   <div class="material" data-material="plank" style="left: 1580px; top: 2700px;">🪵</div>
   <div class="material" data-material="plank" style="left: 1720px; top: 2920px;">🪵</div>
   <div class="material" data-material="plank" style="left: 1600px; top: 2600px;">🪵</div>
-  <div class="material" data-material="plank" style="left: 1840px; top: 2660px;">🪵</div>
+  <div class="material" data-material="plank" style="left: 1820px; top: 2680px;">🪵</div>
   <div class="material" data-material="plank" style="left: 1690px; top: 2740px;">🪵</div>
   <div class="material" data-material="plank" style="left: 1750px; top: 2830px;">🪵</div>
   <div class="material" data-material="windCrystal" style="left: 1100px; top: 2640px;">🔮</div>
@@ -494,7 +494,10 @@
           <div class="player-mini">
             <span class="mini-level">Lv.<b id="mini-level">1</b></span>
             <span class="mini-gems">💎 <b id="mini-gems">0</b></span>
-            <span class="mini-materials">🍃 <b id="mini-seeds">0</b></span>
+            <span class="mini-material" title="风种">🍃<b id="mini-mat-windSeed">0</b></span>
+            <span class="mini-material" title="风灯">🏮<b id="mini-mat-windLamp">0</b></span>
+            <span class="mini-material" title="木板">🪵<b id="mini-mat-plank">0</b></span>
+            <span class="mini-material" title="风压晶">🔮<b id="mini-mat-windCrystal">0</b></span>
           </div>
         </div>
       </header>
@@ -832,6 +835,7 @@
         <p class="shop-balance">我的钻石：<span id="shop-gems">0</span> 💎</p>
         <div class="shop-tabs">
           <button class="shop-tab active" id="shop-tab-weapons" data-shop-tab="weapons">武器</button>
+          <button class="shop-tab" id="shop-tab-armor" data-shop-tab="armor">防具</button>
           <button class="shop-tab" id="shop-tab-consumables" data-shop-tab="consumables">道具</button>
         </div>
         <div class="shop-list" id="shop-list"></div>
@@ -913,8 +917,8 @@
     </section>
   </div>
 
-  <script src="js/data.js?v=5.6"></script>
-  <script src="js/learning.js?v=5.6"></script>
-  <script src="js/game.js?v=5.6"></script>
+  <script src="js/data.js?v=5.7"></script>
+  <script src="js/learning.js?v=5.7"></script>
+  <script src="js/game.js?v=5.7"></script>
 </body>
 </html>

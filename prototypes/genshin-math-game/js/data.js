@@ -39,19 +39,19 @@ const REGIONS = [
     id: 4, name: '澄水庭', theme: '代数思维', element: 'hydro',
     emoji: '💧', color: '#4fc3f7',
     story: '水流千变万化，却始终遵循等式的平衡。用字母表示未知数，寻找等量关系，就像解开水元素的谜题。运算律、方程、负数、分数——抽象思维的洪流在此汇聚。',
-    enemyEmoji: '🌊', enemyName: '水形幻人', enemyAttack: 28, enemyDefense: 8
+    enemyEmoji: '🌊', enemyName: '水形幻人', enemyAttack: 26, enemyDefense: 8
   },
   {
     id: 5, name: '赤焰谷', theme: '比与比例', element: 'pyro',
     emoji: '🔥', color: '#ef7a35',
     story: '烈焰映照下，两个量之间的关系变得炽热而清晰。比、百分数、正比例与反比例——它们描述着“缩放”与“依存”，是通往函数世界的火种。',
-    enemyEmoji: '🔥', enemyName: '熔岩战兽', enemyAttack: 32, enemyDefense: 10
+    enemyEmoji: '🔥', enemyName: '熔岩战兽', enemyAttack: 30, enemyDefense: 10
   },
   {
     id: 6, name: '雪境宫', theme: '综合试炼', element: 'cryo',
     emoji: '❄️', color: '#9fd6e3',
     story: '冰雪覆盖的终极殿堂。这里没有单一的元素，所有方法论将交织成最严酷的考验。把“具体数的操作”升华到“抽象关系的把握”，才能成为真正的数境探索者。',
-    enemyEmoji: '👿', enemyName: '寒域演算体', enemyAttack: 36, enemyDefense: 12
+    enemyEmoji: '👿', enemyName: '寒域演算体', enemyAttack: 33, enemyDefense: 12
   }
 ];
 

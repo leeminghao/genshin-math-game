@@ -4642,3 +4642,14 @@ html.reduced-motion *::after {
 }
 .mech-pan small { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
 .mech-pivot { font-size: 34px; }
+
+
+/* HUD 材料栏 */
+.mini-material {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.mini-material b {
+  color: var(--element-anemo);
+  margin-left: 2px;
+}

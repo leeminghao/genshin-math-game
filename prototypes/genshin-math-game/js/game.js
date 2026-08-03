@@ -59,6 +59,12 @@ window.addEventListener('unhandledrejection', function(e) {
     { id: 'shield', name: '护盾符文', emoji: '🛡️', cost: 30, desc: '战斗中抵挡一次怪物攻击' },
     { id: 'scroll', name: '智慧卷轴', emoji: '📜', cost: 25, desc: '战斗中免费查看当前题的完整提示' }
   ];
+  // 防具：提供防御加成，降低怪物反击伤害（布衣免费，其余钻石购买）
+  const ARMORS = [
+    { id: 'cloth', name: '新手布衣', emoji: '🧥', cost: 0, defenseBonus: 2, desc: '旅行者的第一件防具' },
+    { id: 'leather', name: '风旅皮甲', emoji: '🥋', cost: 60, defenseBonus: 4, desc: '轻便结实的皮甲' },
+    { id: 'rockmail', name: '岩心铠甲', emoji: '🛡️', cost: 140, defenseBonus: 7, desc: '岩岚港工匠的杰作' }
+  ];
 
   // 填充式机关：地图上的数学实体。收集材料 → 估算数量 → 投放 → 物理反馈（不够/正好/多了/歪了）→ 符号定格
   // type 说明：
@@ -288,10 +294,12 @@ window.addEventListener('unhandledrejection', function(e) {
     // 背包：已购武器 id 列表与道具数量；装备：当前使用的武器
     inventory: {
       weapons: ['wooden'],
+      armors: ['cloth'],
       consumables: { potion: 0, shield: 0, scroll: 0 }
     },
     equipment: {
-      weapon: 'wooden'
+      weapon: 'wooden',
+      armor: 'cloth'
     },
     // 收集材料：机关的运算对象（风种修风车、木板铺风桥……）
     materials: {
@@ -699,9 +707,12 @@ window.addEventListener('unhandledrejection', function(e) {
     const rawInventory = isPlainObject(rawState.inventory) ? rawState.inventory : {};
     const rawEquipment = isPlainObject(rawState.equipment) ? rawState.equipment : {};
     const validWeaponIds = new Set(WEAPONS.map(item => item.id));
+    const validArmorIds = new Set(ARMORS.map(item => item.id));
     const validConsumableIds = new Set(CONSUMABLES.map(item => item.id));
     normalized.inventory.weapons = uniqueValues(rawInventory.weapons, value => validWeaponIds.has(value));
     if (!normalized.inventory.weapons.includes('wooden')) normalized.inventory.weapons.unshift('wooden');
+    normalized.inventory.armors = uniqueValues(rawInventory.armors, value => validArmorIds.has(value));
+    if (!normalized.inventory.armors.includes('cloth')) normalized.inventory.armors.unshift('cloth');
     const rawConsumables = isPlainObject(rawInventory.consumables) ? rawInventory.consumables : {};
     Object.entries(rawConsumables).forEach(([id, count]) => {
       if (validConsumableIds.has(id)) {
@@ -710,6 +721,8 @@ window.addEventListener('unhandledrejection', function(e) {
     });
     normalized.equipment.weapon = normalized.inventory.weapons.includes(rawEquipment.weapon)
       ? rawEquipment.weapon : 'wooden';
+    normalized.equipment.armor = normalized.inventory.armors.includes(rawEquipment.armor)
+      ? rawEquipment.armor : 'cloth';
 
     // 材料：旧存档缺省时给 0，损坏字段丢弃
     const rawMaterials = isPlainObject(rawState.materials) ? rawState.materials : {};
@@ -1653,37 +1666,42 @@ window.addEventListener('unhandledrejection', function(e) {
     const list = $('#shop-list');
     list.innerHTML = '';
 
-    if (shopActiveTab === 'weapons') {
-      WEAPONS.forEach(weapon => {
-        const owned = state.inventory.weapons.includes(weapon.id);
-        const equipped = state.equipment.weapon === weapon.id;
+    if (shopActiveTab === 'weapons' || shopActiveTab === 'armor') {
+      const isWeapon = shopActiveTab === 'weapons';
+      const items = isWeapon ? WEAPONS : ARMORS;
+      items.forEach(gear => {
+        const ownedList = isWeapon ? state.inventory.weapons : state.inventory.armors;
+        const equippedId = isWeapon ? state.equipment.weapon : state.equipment.armor;
+        const owned = ownedList.includes(gear.id);
+        const equipped = equippedId === gear.id;
         const item = document.createElement('div');
         item.className = 'shop-item' + (equipped ? ' equipped' : '');
         item.innerHTML = `
-          <div class="shop-item-icon">${weapon.emoji}</div>
-          <div class="shop-item-name">${weapon.name}</div>
-          <div class="shop-item-desc">${weapon.desc}</div>
-          <div class="shop-item-stat">⚔️ 攻击 +${weapon.attackBonus}</div>
+          <div class="shop-item-icon">${gear.emoji}</div>
+          <div class="shop-item-name">${gear.name}</div>
+          <div class="shop-item-desc">${gear.desc}</div>
+          <div class="shop-item-stat">${isWeapon ? `⚔️ 攻击 +${gear.attackBonus}` : `🛡️ 防御 +${gear.defenseBonus}`}</div>
         `;
         const button = document.createElement('button');
         button.className = 'genshin-btn small' + (equipped ? ' primary' : '');
-        button.textContent = equipped ? '使用中' : (owned ? '装备' : `购买 ${weapon.cost} 💎`);
-        button.disabled = equipped || (!owned && state.player.gems < weapon.cost);
+        button.textContent = equipped ? '使用中' : (owned ? '装备' : `购买 ${gear.cost} 💎`);
+        button.disabled = equipped || (!owned && state.player.gems < gear.cost);
         button.addEventListener('click', () => {
           if (!owned) {
-            if (state.player.gems < weapon.cost) {
-              showHint(`还需要 ${weapon.cost - state.player.gems} 钻石才能购买「${weapon.name}」。`);
+            if (state.player.gems < gear.cost) {
+              showHint(`还需要 ${gear.cost - state.player.gems} 钻石才能购买「${gear.name}」。`);
               return;
             }
-            state.player.gems -= weapon.cost;
-            state.inventory.weapons.push(weapon.id);
+            state.player.gems -= gear.cost;
+            ownedList.push(gear.id);
             sfx('collect');
-            showHint(`⚔️ 购入「${weapon.name}」！已自动装备。`);
-            trackEvent('shop_buy_weapon', { id: weapon.id, cost: weapon.cost });
+            showHint(`${gear.emoji} 购入「${gear.name}」！已自动装备。`);
+            trackEvent(isWeapon ? 'shop_buy_weapon' : 'shop_buy_armor', { id: gear.id, cost: gear.cost });
           } else {
             sfx('click');
           }
-          state.equipment.weapon = weapon.id;
+          if (isWeapon) state.equipment.weapon = gear.id;
+          else state.equipment.armor = gear.id;
           updateMapHud();
           saveGame();
           renderShop();
@@ -1735,15 +1753,18 @@ window.addEventListener('unhandledrejection', function(e) {
     return state.player.maxHp + (hasPassive('hpBoost') ? 25 : 0);
   }
 
-  // 玩家攻防：基础值随等级成长，武器提供攻击加成
+  // 玩家攻防：基础值随等级成长，武器提供攻击加成，防具提供防御加成
   function getEquippedWeapon() {
     return WEAPONS.find(item => item.id === state.equipment.weapon) || WEAPONS[0];
+  }
+  function getEquippedArmor() {
+    return ARMORS.find(item => item.id === state.equipment.armor) || ARMORS[0];
   }
   function getPlayerAttack() {
     return 10 + (state.player.level - 1) * 2 + getEquippedWeapon().attackBonus;
   }
   function getPlayerDefense() {
-    return 5 + Math.floor((state.player.level - 1) / 2);
+    return 5 + Math.floor((state.player.level - 1) / 2) + getEquippedArmor().defenseBonus;
   }
   function getEnemyAttack() {
     return REGIONS[session.currentRegionId]?.enemyAttack ?? 12;
@@ -1869,7 +1890,10 @@ window.addEventListener('unhandledrejection', function(e) {
   function updateMapHud() {
     if ($('#mini-level')) $('#mini-level').textContent = state.player.level;
     if ($('#mini-gems')) $('#mini-gems').textContent = state.player.gems;
-    if ($('#mini-seeds')) $('#mini-seeds').textContent = state.materials?.windSeed || 0;
+    ['windSeed', 'windLamp', 'plank', 'windCrystal'].forEach(id => {
+      const el = $(`#mini-mat-${id}`);
+      if (el) el.textContent = state.materials?.[id] || 0;
+    });
   }
 
   function addExperience(amount) {
@@ -4784,8 +4808,9 @@ window.addEventListener('unhandledrejection', function(e) {
 
     // 武器与道具状态
     const weapon = getEquippedWeapon();
+    const armor = getEquippedArmor();
     const weaponInfo = $('#player-weapon-info');
-    if (weaponInfo) weaponInfo.textContent = `${weapon.emoji} ${weapon.name} ⚔️${getPlayerAttack()}`;
+    if (weaponInfo) weaponInfo.textContent = `${weapon.emoji} ${weapon.name} ⚔️${getPlayerAttack()} ${armor.emoji} 🛡️${getPlayerDefense()}`;
     const strikeBtn = $('#weapon-strike-btn');
     if (strikeBtn) {
       strikeBtn.disabled = session.weaponStrikeUsed;
