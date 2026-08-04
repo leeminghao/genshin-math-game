@@ -280,6 +280,9 @@ async function solveBattle() {
           const items = [...document.querySelectorAll('.dragsplit-item')];
           const per = Math.floor(q.interaction.total / q.interaction.zones);
           items.forEach((item, i) => { zones[Math.floor(i / per)].click(); item.click(); });
+        } else if (q.interaction.type === 'shapePick') {
+          const cards = [...document.querySelectorAll('.shapepick-card')];
+          q.interaction.items.forEach((item, i) => { if (item.match) cards[i].click(); });
         }
         document.querySelector('.interaction-confirm-bar .genshin-btn').click();
         return;
@@ -721,8 +724,8 @@ try {
   assert.equal(report.armor.armor, 'leather');
   assert.ok(report.armor.owned.includes('leather'));
   await evaluate('document.querySelector("#btn-close-shop").click()');
-  // 进入战斗：敌属性、武器信息、道具计数、武器技能、弱点题、攻防公式
-  await evaluate('window.__game.session.mapActive=false;window.__game.startLevel(1,0)');
+  // 进入战斗（2-0 纯选择题关卡）：敌属性、武器信息、道具计数、武器技能、弱点题、攻防公式
+  await evaluate('window.__game.session.mapActive=false;window.__game.startLevel(2,0)');
   await finishDialog();
   await waitFor('document.querySelector(".screen.active")?.id === "battle-screen"');
   report.battleItems = await evaluate(`({
@@ -734,7 +737,7 @@ try {
     qCount: window.__game.session.currentQuestions.length,
     hp: window.__game.state.player.hp
   })`);
-  assert.match(report.battleItems.enemyStats, /⚔️ 16 · 🛡️ 2/);
+  assert.match(report.battleItems.enemyStats, /⚔️ 20 · 🛡️ 4/);
   assert.match(report.battleItems.weaponInfo, /雷鸣长枪/);
   assert.equal(report.battleItems.strikeDisabled, false);
   assert.equal(report.battleItems.potionCount, '1');
@@ -747,7 +750,7 @@ try {
     disabled: document.querySelector('#weapon-strike-btn').disabled
   })`);
   assert.deepEqual(report.strike, { used: true, stunned: true, disabled: true });
-  // 答错：震慑抵消一次怪物反击；等重渲染后再答错，反击伤害 = 敌攻16 - 玩家防9(基础5+皮甲4) = 7
+  // 答错：震慑抵消一次怪物反击；等重渲染后再答错，反击伤害 = 敌攻20 - 玩家防9(基础5+皮甲4) = 11
   await evaluate(`(() => {
     const q = window.__game.session.currentQuestions[window.__game.session.currentQuestionIndex];
     [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) !== String(q.answer)).click();
@@ -759,7 +762,7 @@ try {
     [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) !== String(q.answer)).click();
   })()`);
   await sleep(120);
-  assert.equal(await evaluate('window.__game.state.player.hp'), report.battleItems.hp - 7, '第二次答错按攻防公式扣血');
+  assert.equal(await evaluate('window.__game.state.player.hp'), report.battleItems.hp - 11, '第二次答错按攻防公式扣血');
   // 生命药水恢复 40（先压低血量，避免顶到上限导致断言失真）
   await evaluate('window.__game.state.player.hp = 30');
   await evaluate('document.querySelector("#use-potion-btn").click()');
@@ -834,6 +837,51 @@ try {
   })()`);
   await waitFor('window.__game.session.currentQuestionIndex === 2', 15000);
   report.dragSplit = { total: dsCfg.total, zones: dsCfg.zones, passed: true };
+
+  stage('shapePick 图形辨认：点选分类（1-0/1-4）');
+  // 1-4 直角题：少选一个判错挨反击，选全集判对进题
+  await evaluate('window.__game.session.mapActive=false;window.__game.startLevel(1,4)');
+  await finishDialog();
+  await waitFor('document.querySelector(".screen.active")?.id === "battle-screen" && !!document.querySelector(".shapepick-grid")');
+  report.shapePick = await evaluate(`({
+    criteria: window.__game.session.currentQuestions[0].interaction.criteria,
+    cards: document.querySelectorAll('.shapepick-card').length
+  })`);
+  assert.equal(report.shapePick.criteria, '直角');
+  assert.equal(report.shapePick.cards, 6);
+  const hpBeforePick = await evaluate('window.__game.state.player.hp');
+  // 只选 2 个匹配项确认 → 判错
+  await evaluate(`(() => {
+    const q = window.__game.session.currentQuestions[0];
+    const cards = [...document.querySelectorAll('.shapepick-card')];
+    q.interaction.items.forEach((item, i) => { if (item.match && i < 2) cards[i].click(); });
+    document.querySelector('.interaction-confirm-bar .genshin-btn').click();
+  })()`);
+  await waitFor('window.__game.session.answered === false');
+  assert.ok(await evaluate('window.__game.state.player.hp') < hpBeforePick, '少选应触发怪物反击');
+  // 选齐全部匹配项 → 判对进下一题
+  await evaluate(`(() => {
+    const q = window.__game.session.currentQuestions[0];
+    const cards = [...document.querySelectorAll('.shapepick-card')];
+    q.interaction.items.forEach((item, i) => { if (item.match) cards[i].click(); });
+    document.querySelector('.interaction-confirm-bar .genshin-btn').click();
+  })()`);
+  await waitFor('window.__game.session.currentQuestionIndex === 1', 15000);
+  assert.equal(await evaluate('window.__game.session.currentQuestions[1].interaction.criteria'), '锐角');
+  // 完成剩余题 → 通关
+  await evaluate(`(() => {
+    const q = window.__game.session.currentQuestions[1];
+    const cards = [...document.querySelectorAll('.shapepick-card')];
+    q.interaction.items.forEach((item, i) => { if (item.match) cards[i].click(); });
+    document.querySelector('.interaction-confirm-bar .genshin-btn').click();
+  })()`);
+  await waitFor('document.querySelector(".screen.active")?.id === "reward-screen"', 15000);
+  assert.ok(await evaluate('window.__game.state.player.completedLevels.includes("1-4")'));
+  // 1-0 生成器两关 shapePick 可被 solveBattle 通关
+  await evaluate('window.__game.startLevel(1,0)');
+  await finishDialog();
+  await solveBattle();
+  assert.ok(await evaluate('window.__game.state.player.completedLevels.includes("1-0")'));
 
   stage('弹窗锁移动、损坏存档与旧存档迁移');
   await fresh();

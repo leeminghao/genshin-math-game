@@ -5033,6 +5033,51 @@ window.addEventListener('unhandledrejection', function(e) {
   function renderBattleInteraction(cfg, container) {
     if (cfg.type === 'tapCount') renderTapCount(cfg, container);
     else if (cfg.type === 'dragSplit') renderDragSplit(cfg, container);
+    else if (cfg.type === 'shapePick') renderShapePick(cfg, container);
+  }
+
+  // shapePick 图形辨认：从一堆物件中点选所有符合特征的（分类思想）
+  function renderShapePick(cfg, container) {
+    const it = { type: 'shapePick', selected: new Set(), cfg };
+    session.currentInteraction = it;
+
+    const hint = document.createElement('div');
+    hint.className = 'shapepick-hint';
+    hint.textContent = `点选所有「${cfg.criteria}」，不多选也不少选`;
+
+    const grid = document.createElement('div');
+    grid.className = 'shapepick-grid';
+    const counter = document.createElement('div');
+    counter.className = 'shapepick-counter';
+    counter.textContent = '已选 0 个';
+
+    cfg.items.forEach((item, index) => {
+      const card = document.createElement('button');
+      card.className = 'shapepick-card';
+      card.innerHTML = `<span class="shapepick-emoji">${item.emoji}</span><span class="shapepick-label">${item.label}</span>`;
+      card.addEventListener('click', () => {
+        if (session.answered) return;
+        if (it.selected.has(index)) {
+          it.selected.delete(index);
+          card.classList.remove('selected');
+        } else {
+          it.selected.add(index);
+          card.classList.add('selected');
+          sfx('click');
+        }
+        counter.textContent = `已选 ${it.selected.size} 个`;
+      });
+      grid.appendChild(card);
+    });
+
+    container.appendChild(hint);
+    container.appendChild(grid);
+    container.appendChild(counter);
+    makeInteractionConfirm(container, () => {
+      const matchCount = cfg.items.filter(item => item.match).length;
+      if (it.selected.size !== matchCount) return false;
+      return cfg.items.every((item, index) => item.match === it.selected.has(index));
+    });
   }
 
   function makeInteractionConfirm(container, checkFn) {

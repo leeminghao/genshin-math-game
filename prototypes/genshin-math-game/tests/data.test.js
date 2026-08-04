@@ -57,6 +57,7 @@ test('所有动态题目在 1000 个固定种子下结构有效', () => {
       const questions = generateQuestions(levelId);
       assert.ok(questions.length >= 3 && questions.length <= 4, `${levelId} 题量异常`);
       questions.forEach(question => {
+        if (question.interaction) return; // 动手题由 validateQuestion 走交互结构校验
         assert.equal(question.options.length, 4);
         assert.equal(new Set(question.options.map(String)).size, 4);
         assert.equal(question.options.map(String).filter(value => value === String(question.answer)).length, 1);

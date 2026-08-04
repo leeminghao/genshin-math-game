@@ -330,10 +330,40 @@ const LEVELS = [
     {
       id: '1-4', name: '角的认识', desc: '锐角、直角、钝角',
       skill: 'geo',
-      intro: [{ speaker: '星芽', emoji: '🧚', text: '角有锐角、直角、钝角之分。' }],
+      intro: [{ speaker: '星芽', emoji: '🧚', text: '巨像身上的角不一样：有方方正正的直角，也有尖尖的锐角。亲手把它们分出来吧！' }],
       questions: [
-        { text: '直角是多少度？', options: ['30°', '60°', '90°', '120°'], answer: '90°', hint: '直角=90°。' },
-        { text: '比直角小的角叫？', options: ['锐角', '直角', '钝角', '平角'], answer: '锐角', hint: '锐角<90°。' }
+        {
+          text: '岩港工匠修补城墙只要「直角」零件！点选所有带直角的物件。',
+          options: ['三角板', '窗户', '书本'], answer: 3,
+          hint: '直角像桌角一样方方正正，正好 90°。',
+          interaction: {
+            type: 'shapePick', criteria: '直角',
+            items: [
+              { emoji: '📐', label: '三角板', match: true },
+              { emoji: '🪟', label: '窗户', match: true },
+              { emoji: '📕', label: '书本', match: true },
+              { emoji: '⛺', label: '帐篷', match: false },
+              { emoji: '🍕', label: '披萨', match: false },
+              { emoji: '⛰️', label: '山坡', match: false }
+            ]
+          }
+        },
+        {
+          text: '巨像的盾牌只装「锐角」零件！点选所有带锐角的物件。',
+          options: ['帐篷', '披萨'], answer: 2,
+          hint: '锐角比直角小，尖尖的。',
+          interaction: {
+            type: 'shapePick', criteria: '锐角',
+            items: [
+              { emoji: '⛺', label: '帐篷', match: true },
+              { emoji: '🍕', label: '披萨', match: true },
+              { emoji: '📐', label: '三角板', match: false },
+              { emoji: '🪟', label: '窗户', match: false },
+              { emoji: '📖', label: '翻开的书', match: false },
+              { emoji: '🚪', label: '大门', match: false }
+            ]
+          }
+        }
       ]
     },
     {
@@ -1263,18 +1293,53 @@ const QUESTION_GENERATORS = {
   },
   // 1-0 认识图形
   '1-0': () => {
-    const shapes = [
+    const pickSets = [
+      { criteria: '圆柱', story: '巨像的「圆柱」零件散了一地！',
+        items: [
+          { emoji: '🥫', label: '罐头', match: true },
+          { emoji: '🧻', label: '纸筒', match: true },
+          { emoji: '🎲', label: '骰子', match: false },
+          { emoji: '🎾', label: '网球', match: false },
+          { emoji: '📦', label: '纸箱', match: false },
+          { emoji: '🧊', label: '冰块', match: false }
+        ] },
+      { criteria: '长方体', story: '巨像的「长方体」零件散了一地！',
+        items: [
+          { emoji: '📦', label: '纸箱', match: true },
+          { emoji: '🧊', label: '冰块', match: true },
+          { emoji: '🎲', label: '骰子', match: true },
+          { emoji: '🥫', label: '罐头', match: false },
+          { emoji: '🎾', label: '网球', match: false },
+          { emoji: '🏀', label: '篮球', match: false }
+        ] },
+      { criteria: '球', story: '巨像的「球」零件散了一地！',
+        items: [
+          { emoji: '🎾', label: '网球', match: true },
+          { emoji: '🏀', label: '篮球', match: true },
+          { emoji: '🥫', label: '罐头', match: false },
+          { emoji: '📦', label: '纸箱', match: false },
+          { emoji: '🎲', label: '骰子', match: false },
+          { emoji: '🧻', label: '纸筒', match: false }
+        ] }
+    ];
+    const quizPool = [
       { q: '下面哪个物体最接近“圆柱”？', opts: ['🎲 骰子', '🥫 罐头', '🎾 网球', '📦 纸箱'], a: '🥫 罐头', h: '圆柱上下两个底面是圆。' },
       { q: '长方体有几个面？', opts: [4, 5, 6, 8], a: 6, h: '长方体有 6 个面。' },
       { q: '下面哪个图形有“四条边相等、四个直角”？', opts: ['长方形', '正方形', '三角形', '圆形'], a: '正方形', h: '正方形四条边一样长。' },
       { q: '球有什么特点？', opts: ['有棱角', '可以滚动', '有 6 个面', '有直角'], a: '可以滚动', h: '球是曲面立体，可以滚动。' }
     ];
-    return shuffle(shapes).slice(0, 3).map(s => ({
-      text: s.q,
-      options: s.opts,
-      answer: s.a,
-      hint: s.h
-    }));
+    const picks = shuffle(pickSets).slice(0, 2);
+    const quiz = shuffle(quizPool)[0];
+    return [
+      ...picks.map(set => ({
+        text: `${set.story}点选所有「${set.criteria}」帮它装回去！`,
+        options: set.items.filter(item => item.match).map(item => item.label),
+        answer: set.items.filter(item => item.match).length,
+        hint: `${set.criteria}有 ${set.items.filter(item => item.match).length} 个，不多选也不少选。`,
+        interaction: { type: 'shapePick', criteria: set.criteria, items: set.items }
+      })),
+      { text: quiz.q, options: quiz.opts, answer: quiz.a, hint: quiz.h }
+    ];
   },
   // 1-1 周长
   '1-1': () => {
@@ -1850,6 +1915,20 @@ const QUESTION_GENERATORS = {
 function validateQuestion(question, levelId = 'unknown', index = 0) {
   if (!question || typeof question.text !== 'string' || !question.text.trim()) {
     throw new Error(`${levelId} 第 ${index + 1} 题缺少题干`);
+  }
+  // 动手题（interaction）校验交互结构，不受选择题"恰好 4 选项"约束
+  if (question.interaction && typeof question.interaction === 'object') {
+    const it = question.interaction;
+    if (it.type === 'shapePick') {
+      if (!Array.isArray(it.items) || it.items.length < 2) {
+        throw new Error(`${levelId} 第 ${index + 1} 题 shapePick 至少需要 2 个物件`);
+      }
+      const matches = it.items.filter(item => item.match === true).length;
+      if (matches < 1 || matches >= it.items.length) {
+        throw new Error(`${levelId} 第 ${index + 1} 题 shapePick 匹配项必须既非全选也非全不选`);
+      }
+    }
+    return true;
   }
   if (!Array.isArray(question.options) || question.options.length !== 4) {
     throw new Error(`${levelId} 第 ${index + 1} 题必须恰好有 4 个选项`);
