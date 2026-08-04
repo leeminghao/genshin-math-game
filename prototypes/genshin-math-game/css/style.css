@@ -3614,7 +3614,21 @@ html.reduced-motion *::after {
 
   .map-header { left: 8px; right: 8px; top: 8px; }
   .map-title { font-size: 16px; letter-spacing: 0; }
-  .player-mini { gap: 6px; font-size: 11px; }
+  /* 材料栏从头部分离：挪到小地图正下方，避免头部溢出遮住小地图 */
+  .player-mini {
+    position: absolute;
+    top: 262px; right: 2px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 128px;
+    gap: 4px 8px;
+    padding: 6px 8px;
+    font-size: 11px;
+    background: rgba(11,15,23,0.72);
+    border: 1px solid rgba(232,212,154,0.3);
+    border-radius: 10px;
+    z-index: 20;
+  }
   .map-controls { top: auto; left: 10px; bottom: 54px; }
   .control-hint { display: none; }
   .touch-dpad { grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(2, 56px); }
