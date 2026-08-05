@@ -959,6 +959,26 @@ try {
   assert.equal(await evaluate('window.__game.session.currentWaypoint'), 9, '应靠近回声谷口传送点');
   report.newAreas = { waypoint8: true, waypoint9: true };
 
+  stage('标签分级与目标光柱');
+  await fresh();
+  // 光柱：进图后可见，指向第一座未修复机关（风车 1640,2420）
+  await waitFor('!document.querySelector("#guide-beam").classList.contains("hidden")', 8000);
+  report.beam = await evaluate(`({
+    left: parseInt(document.querySelector('#guide-beam').style.left),
+    top: parseInt(document.querySelector('#guide-beam').style.top)
+  })`);
+  assert.deepEqual(report.beam, { left: 1640, top: 2420 }, '光柱应指向风车');
+  // 标签分级：村庄标签远隐藏、近显示
+  await evaluate(`Object.assign(window.__game.session,{playerX:1400,playerY:2820,targetX:1400,targetY:2820,isMoving:false,moveMode:null});window.__game.updatePlayerSprite()`);
+  await sleep(600);
+  const villageFar = await evaluate(`getComputedStyle(document.querySelectorAll('.village-label')[0]).opacity`);
+  await evaluate(`Object.assign(window.__game.session,{playerX:1200,playerY:2400,targetX:1200,targetY:2400,isMoving:false,moveMode:null});window.__game.updatePlayerSprite()`);
+  await sleep(600);
+  const villageNear = await evaluate(`getComputedStyle(document.querySelectorAll('.village-label')[0]).opacity`);
+  assert.equal(villageFar, '0', '远处村庄标签应隐藏');
+  assert.equal(villageNear, '1', '靠近村庄标签应显示');
+  report.labels = { villageFar, villageNear };
+
   stage('移动端地图与任务台边界');
   await send('Emulation.setDeviceMetricsOverride', {
     width: 390, height: 844, deviceScaleFactor: 1, mobile: true

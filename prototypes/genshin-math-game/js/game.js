@@ -468,6 +468,10 @@ window.addEventListener('unhandledrejection', function(e) {
     itemShield: false,         // 护盾符文：抵挡一次怪物攻击
     enemyStunned: false,       // 弱点破防/武器震慑：怪物下一次攻击无效
     usedActiveSkills: [],      // 本场战斗已用的主动技能
+    // 目标光柱（会话级，不持久化）
+    beamUntil: 0,
+    beamCooldownUntil: 0,
+    lastProgressAt: 0,
     // 填充式机关会话状态（不持久化）
     currentMechanism: null,
     mechanism: null            // { id, estimate, filled, failCount, resolved }
@@ -843,6 +847,9 @@ window.addEventListener('unhandledrejection', function(e) {
       itemShield: false,
       enemyStunned: false,
       usedActiveSkills: [],
+      beamUntil: 0,
+      beamCooldownUntil: 0,
+      lastProgressAt: 0,
       currentMechanism: null,
       mechanism: null
     });
@@ -2316,6 +2323,8 @@ window.addEventListener('unhandledrejection', function(e) {
         updateCamera();
         // 只有初始化完整成功后才激活地图，避免一次异常让后续渲染无法重试。
         session.mapActive = true;
+        session.lastProgressAt = performance.now();
+        showGuideBeam(8000); // 进入地图时亮一次目标光柱
         startMapLoop();
         setTimeout(() => {
           if ($('#tutorial-overlay')?.classList.contains('hidden')) {
@@ -2555,6 +2564,7 @@ window.addEventListener('unhandledrejection', function(e) {
         if (session.animTick > 0.2) {
           session.animTick = 0;
           try { updateProximityAnimations(); } catch (e) { console.warn('updateProximityAnimations error', e); }
+          try { updateGuideBeam(); } catch (e) { console.warn('updateGuideBeam error', e); }
         }
       }
       try { updateCompass(); } catch (e) { console.warn('updateCompass error', e); }
@@ -2742,7 +2752,9 @@ window.addEventListener('unhandledrejection', function(e) {
       ['.material', 300],
       ['.npc', 170],
       ['.waypoint', 230],
-      ['.hidden-area', 260]
+      ['.hidden-area', 260],
+      ['.village', 210],
+      ['.region-gate', 200]
     ];
     groups.forEach(([sel, radius]) => {
       $$(sel).forEach(el => {
@@ -2752,6 +2764,39 @@ window.addEventListener('unhandledrejection', function(e) {
         el.classList.toggle('near', Math.hypot(px - x, py - y) < radius);
       });
     });
+  }
+
+  // 目标光柱：当前目标 = 第一座未修复的机关；全修复则指向当前区域地标。
+  // 出现时机：进入地图时亮 8 秒；完成关卡后指向下一个目标；卡住 60 秒无进展时亮 8 秒。
+  function currentObjectiveTarget() {
+    const nextMech = Object.values(MECHANISMS).find(m => !m.restored());
+    if (nextMech) return { x: nextMech.x, y: nextMech.y };
+    const lm = $(`#landmark-${state.player.currentRegion || 0}`);
+    if (lm) return { x: parseInt(lm.style.left), y: parseInt(lm.style.top) };
+    return null;
+  }
+
+  function showGuideBeam(durationMs = 8000) {
+    session.beamUntil = performance.now() + durationMs;
+  }
+
+  function updateGuideBeam() {
+    const beam = $('#guide-beam');
+    if (!beam) return;
+    const now = performance.now();
+    const target = currentObjectiveTarget();
+    // 卡住检测：60 秒无任何关卡/机关进展，且冷却结束
+    if (target && session.lastProgressAt && now - session.lastProgressAt > 60000 && now > session.beamCooldownUntil) {
+      session.beamUntil = now + 8000;
+      session.beamCooldownUntil = now + 90000;
+    }
+    if (target && session.beamUntil && now < session.beamUntil) {
+      beam.style.left = target.x + 'px';
+      beam.style.top = target.y + 'px';
+      beam.classList.remove('hidden');
+    } else {
+      beam.classList.add('hidden');
+    }
   }
 
   // 检测地标距离：靠近后显示入口，由玩家点击按钮或按 Enter 确认进入。
@@ -3371,6 +3416,8 @@ window.addEventListener('unhandledrejection', function(e) {
     }
     checkAchievements();
     saveGame();
+    session.lastProgressAt = performance.now();
+    showGuideBeam(8000); // 完成后亮光柱，指向下一个目标
     trackEvent('level_complete', { levelId: level.id, source: 'mechanism', firstClear, stars: starsThisRun });
     showReward(level, region, {
       rewards,
@@ -4644,6 +4691,8 @@ window.addEventListener('unhandledrejection', function(e) {
     const region = REGIONS[session.currentRegionId];
     if (!mission || !level || session.battleResolved) return;
     session.battleResolved = true;
+    session.lastProgressAt = performance.now();
+    showGuideBeam(8000); // 任务完成后亮光柱，指向下一个目标
     const firstClear = !state.player.completedLevels.includes(level.id);
     const independentCorrect = (session.missionPrimaryErrors === 0 ? 1 : 0)
       + (session.missionExpressionAttempts === 1 && session.missionHintTier < 3 ? 1 : 0);
@@ -5634,6 +5683,8 @@ window.addEventListener('unhandledrejection', function(e) {
     const region = REGIONS[session.currentRegionId];
 
     const firstClear = !state.player.completedLevels.includes(level.id);
+    session.lastProgressAt = performance.now();
+    showGuideBeam(8000); // 战斗胜利后亮光柱，指向下一个目标
     const starsThisRun = Learning.calculateStars({
       questionCount: session.currentQuestions.length,
       independentCorrect: session.independentCorrect,
