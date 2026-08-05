@@ -207,7 +207,7 @@ const LEVELS = [
     },
     {
       id: '0-6', name: '乘法口诀', desc: '口诀记忆与逆用',
-      skill: 'anemo',
+      skill: 'anemo', boss: true,
       intro: [{ speaker: '星芽', emoji: '🧚', text: '风铃挂成整齐的行和列，不用一只只数，乘法口诀一下子就算出来！' }],
       questions: [
         {
@@ -368,9 +368,25 @@ const LEVELS = [
     },
     {
       id: '1-5', name: '三角形特性', desc: '三边关系与内角和',
-      skill: 'geo',
-      intro: [{ speaker: '星芽', emoji: '🧚', text: '三角形内角和是180°。' }],
+      skill: 'geo', boss: true,
+      intro: [{ speaker: '星芽', emoji: '🧚', text: '岩甲巨像 BOSS 张开了三角形护盾！只有真正的三角形能击碎它。' }],
       questions: [
+        {
+          text: '点选所有「三角形」物件，击碎巨像的护盾！',
+          options: ['三角旗', '三明治', '三角板', '圆盘'], answer: 3,
+          hint: '三角形有 3 条边、3 个角。',
+          interaction: {
+            type: 'shapePick', criteria: '三角形',
+            items: [
+              { emoji: '🔺', label: '三角旗', match: true },
+              { emoji: '🥪', label: '三明治', match: true },
+              { emoji: '📐', label: '三角板', match: true },
+              { emoji: '⚪', label: '圆盘', match: false },
+              { emoji: '🟥', label: '方砖', match: false },
+              { emoji: '⬡', label: '六边形', match: false }
+            ]
+          }
+        },
         { text: '三角形内角和是？', options: ['90°', '180°', '270°', '360°'], answer: '180°', hint: '内角和180°。' },
         { text: '等边三角形每个角是？', options: ['45°', '60°', '90°', '120°'], answer: '60°', hint: '180÷3=60。' }
       ]
@@ -486,9 +502,15 @@ const LEVELS = [
     },
     {
       id: '2-5', name: '元角分换算', desc: '人民币计算',
-      skill: 'electro',
-      intro: [{ speaker: '星芽', emoji: '🧚', text: '1元=10角，1角=10分。' }],
+      skill: 'electro', boss: true,
+      intro: [{ speaker: '星芽', emoji: '🧚', text: '雷幕术士 BOSS 的护盾要 1 元才能击碎！' }],
       questions: [
+        {
+          text: '点亮 10 枚 1 角硬币凑出 1 元，击碎护盾！',
+          options: [8, 9, 10, 11], answer: 10,
+          hint: '1 元 = 10 角，10 枚 1 角就是 1 元。',
+          interaction: { type: 'tapCount', mode: 'fill', item: '🪙', itemName: '1角硬币', rows: 2, cols: 5, target: 10 }
+        },
         { text: '1元5角=？角', options: ['5', '10', '15', '20'], answer: '15', hint: '10+5=15。' },
         { text: '3元2角+2元8角=？', options: ['5元', '6元', '5元10角', '6元10角'], answer: '6元', hint: '2角+8角=1元。' }
       ]
@@ -579,9 +601,15 @@ const LEVELS = [
     },
     {
       id: '3-8', name: '平均数应用', desc: '移多补少',
-      skill: 'dendro',
-      intro: [{ speaker: '星芽', emoji: '🧚', text: '平均数=总数÷份数。' }],
+      skill: 'dendro', boss: true,
+      intro: [{ speaker: '星芽', emoji: '🧚', text: '巨型蕈兽 BOSS 的护盾由 12 颗孢子组成！' }],
       questions: [
+        {
+          text: '把 12 颗孢子平均分成 3 堆，击碎护盾！',
+          options: [3, 4, 5, 6], answer: 4,
+          hint: '12 ÷ 3 = 4，每堆 4 颗。',
+          interaction: { type: 'dragSplit', item: '🍄', itemName: '孢子', zoneName: '孢子堆', zoneEmoji: '🧺', total: 12, zones: 3 }
+        },
         { text: '12、15、18的平均数是？', options: ['12', '15', '18', '20'], answer: '15', hint: '45÷3=15。' },
         { text: '语文90、数学96、英语84，平均分是？', options: ['88', '90', '92', '94'], answer: '90', hint: '270÷3=90。' }
       ]
@@ -696,9 +724,15 @@ const LEVELS = [
     },
     {
       id: '4-9', name: '等式性质', desc: '天平平衡原理',
-      skill: 'hydro',
-      intro: [{ speaker: '星芽', emoji: '🧚', text: '等式两边同时加减乘除相同数，等式成立。' }],
+      skill: 'hydro', boss: true,
+      intro: [{ speaker: '星芽', emoji: '🧚', text: '水形幻人 BOSS 的护盾是一架失衡的天平！' }],
       questions: [
+        {
+          text: '左边 7 颗水珠，右边已有 3 颗。再放几颗让天平平衡，击碎护盾？',
+          options: [3, 4, 5, 6], answer: 4,
+          hint: '3 + 4 = 7，再放 4 颗就平衡。',
+          interaction: { type: 'balance', itemEmoji: '💧', left: 7, rightStart: 3, hintText: '往右盘放水珠，平衡了点确认' }
+        },
         { text: 'x+5=12，x=？', options: ['5', '6', '7', '8'], answer: '7', hint: '12-5=7。' },
         { text: '3x=18，x=？', options: ['5', '6', '7', '8'], answer: '6', hint: '18÷3=6。' }
       ]
@@ -783,15 +817,27 @@ const LEVELS = [
       skill: 'pyro',
       intro: [{ speaker: '星芽', emoji: '🧚', text: '按比分配先求总份数。' }],
       questions: [
+        {
+          text: '赤焰谷的 15 块火石按 3:2 分给两队战士！动手分一分。',
+          options: ['9和5', '9和6', '10和5', '12和3'], answer: '9和6',
+          hint: '3:2 共 5 份，15 ÷ 5 = 3，每份 3 块：9 和 6。',
+          interaction: { type: 'dragSplit', item: '🔥', itemName: '火石', zoneName: '战队', zoneEmoji: '🚩', total: 15, zones: 2, ratio: [3, 2] }
+        },
         { text: '60按2:3分，甲得？', options: ['20', '24', '30', '36'], answer: '24', hint: '60×2/5=24。' },
         { text: '90按1:2:3分，最多是？', options: ['30', '45', '60', '90'], answer: '45', hint: '90×3/6=45。' }
       ]
     },
     {
       id: '5-8', name: '百分数应用', desc: '求百分之几',
-      skill: 'pyro',
-      intro: [{ speaker: '星芽', emoji: '🧚', text: '求一个数的百分之几用乘法。' }],
+      skill: 'pyro', boss: true,
+      intro: [{ speaker: '星芽', emoji: '🧚', text: '熔岩战兽 BOSS 的护盾有 100 格火焰！' }],
       questions: [
+        {
+          text: '点亮 25 格火焰（正好是 25%），击碎护盾！',
+          options: [20, 25, 30, 50], answer: 25,
+          hint: '100 格里点 25 格就是 25%。可以点「整行点亮」更快。',
+          interaction: { type: 'tapCount', mode: 'fill', item: '🔥', itemName: '火格', rows: 10, cols: 10, target: 25 }
+        },
         { text: '200的15%是？', options: ['20', '30', '40', '50'], answer: '30', hint: '200×0.15=30。' },
         { text: '80元打八折是？', options: ['60', '64', '70', '72'], answer: '64', hint: '80×0.8=64。' }
       ]
@@ -887,9 +933,25 @@ const LEVELS = [
     },
     {
       id: '6-8', name: '负数的应用', desc: '温差与海拔',
-      skill: 'hydro',
-      intro: [{ speaker: '星芽', emoji: '🧚', text: '负数表示零下温度、低于海平面。' }],
+      skill: 'hydro', boss: true,
+      intro: [{ speaker: '星芽', emoji: '🧚', text: '寒域演算体 BOSS 的护盾害怕负数！' }],
       questions: [
+        {
+          text: '点选所有「负数」击碎护盾！',
+          options: ['−3', '−8', '−1.5', '+5'], answer: 3,
+          hint: '负数前面有「−」号，表示比 0 小。',
+          interaction: {
+            type: 'shapePick', criteria: '负数',
+            items: [
+              { emoji: '−3', label: '零下3度', match: true },
+              { emoji: '−8', label: '地下8米', match: true },
+              { emoji: '−1.5', label: '欠款1.5元', match: true },
+              { emoji: '+5', label: '零上5度', match: false },
+              { emoji: '0', label: '海平面', match: false },
+              { emoji: '+7', label: '上升7米', match: false }
+            ]
+          }
+        },
         { text: '-5℃到8℃，温差是？', options: ['3', '8', '13', '15'], answer: '13', hint: '8-(-5)=13。' },
         { text: '从-3℃上升10℃后是？', options: ['-13', '7', '13', '10'], answer: '7', hint: '-3+10=7。' }
       ]
@@ -1513,9 +1575,10 @@ const QUESTION_GENERATORS = {
         hint: `1 千克 = 1000 克，${kg} 千克 = ${kg * 1000} 克。`
       },
       {
-        text: `${kg * 1000} 千克等于多少吨？`,
-        options: genOptions(kg, 3, 1), answer: kg,
-        hint: `1000 千克 = 1 吨，${kg * 1000} 千克 = ${kg} 吨。`
+        text: `雷岛工匠要称 ${Math.min(kg, 6)} 千克的雷晶！在天平右盘放 1 千克砝码，放几个正好平衡？`,
+        options: genOptions(Math.min(kg, 6), 2, 1), answer: Math.min(kg, 6),
+        hint: `1 千克砝码放 ${Math.min(kg, 6)} 个就是 ${Math.min(kg, 6)} 千克。`,
+        interaction: { type: 'balance', itemEmoji: '🪨', left: Math.min(kg, 6), rightStart: 0, unit: '千克', hintText: '点「放一个」加 1 千克砝码，平衡了点确认' }
       },
       {
         text: `一袋大米 ${rice} 千克，${bags} 袋大米重多少千克？`,
@@ -1602,9 +1665,10 @@ const QUESTION_GENERATORS = {
         hint: `总数 ${a + b + c} 页，÷ 3 = ${avg}。`
       },
       {
-        text: `四个小朋友身高分别是 ${h1}cm、${h2}cm、${h3}cm、${h4}cm，平均身高约是多少？`,
-        options: genOptions(avgH, 3, 1), answer: avgH,
-        hint: `总数 ÷ 4 = ${avgH}。`
+        text: '三个书架的书有多有少（7 本、3 本、2 本）！移多补少，让三个书架一样多。',
+        options: [3, 4, 5, 6], answer: 4,
+        hint: '12 ÷ 3 = 4。从多的书架取，补给少的书架。',
+        interaction: { type: 'dragSplit', item: '📚', itemName: '书', zoneName: '书架', zoneEmoji: '📚', total: 12, zones: 3, initialZones: [7, 3, 2] }
       },
       {
         text: `五次测验平均分 ${scoreAvg} 分，总分是多少？`,
@@ -1659,9 +1723,10 @@ const QUESTION_GENERATORS = {
     const equationResult = a * x - subtrahend;
     return [
       {
-        text: `方程 x + ${a} = ${x + a} 的解是多少？`,
+        text: `水形幻人的天平：左边 ${x + 3} 颗水珠，右边 3 颗加 1 个神秘盒。往右盘添水珠直到平衡——你添了几颗？神秘盒就相当于几颗！`,
         options: genOptions(x, 3, 1), answer: x,
-        hint: `x = ${x + a} - ${a} = ${x}。`
+        hint: `平衡时右边共 ${x + 3} 颗，你添了 ${x} 颗，神秘盒 = ${x} 颗。`,
+        interaction: { type: 'balance', itemEmoji: '💧', left: x + 3, rightStart: 3, hintText: '往右盘添水珠，平衡了点确认' }
       },
       {
         text: `${a}x = ${b}，x 等于多少？`,

@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <title>数境远征：艾瑟里亚数理冒险</title>
-  <link rel="stylesheet" href="css/style.css?v=6.3">
+  <link rel="stylesheet" href="css/style.css?v=6.4">
 </head>
 <body>
   <div id="app">
@@ -55,7 +55,7 @@
         </div>
         <div class="menu-guide-line"><span class="guide-dot"></span>星芽会陪你观察，答错也可以随时重来。</div>
       </div>
-      <div class="version">2D 开放世界 · 数境大陆 v6.3</div>
+      <div class="version">2D 开放世界 · 数境大陆 v6.4</div>
     </section>
 
     <!-- 三题能力诊断 -->
@@ -588,6 +588,7 @@
           <button class="icon-btn" id="btn-learning-profile" title="学习档案" aria-label="学习档案">🎓</button>
           <button class="icon-btn" id="btn-wardrobe" title="风之装扮" aria-label="风之装扮">🎨</button>
           <button class="icon-btn" id="btn-map-shop" title="商店" aria-label="商店">🛒</button>
+          <button class="icon-btn" id="btn-bigmap" title="探险地图" aria-label="探险地图">🗺️</button>
           <button class="icon-btn" id="btn-map-quests" title="每日/每周任务" aria-label="每日/每周任务">🗓️</button>
           <button class="icon-btn" id="btn-map-achievements" title="成就">🏆</button>
           <button class="icon-btn" id="btn-map-settings" title="设置">⚙️</button>
@@ -667,6 +668,16 @@
         <div class="teleport-title">选择目的地</div>
         <div class="teleport-list" id="teleport-list"></div>
         <button class="genshin-btn" id="btn-close-teleport">取消</button>
+      </div>
+
+      <!-- 全屏探险地图：大图标、迷雾、点已激活传送点传送 -->
+      <div class="bigmap-modal hidden" id="bigmap-modal">
+        <div class="bigmap-overlay" id="bigmap-overlay"></div>
+        <div class="bigmap-content">
+          <div class="bigmap-title">🗺️ 探险地图 <small>点击 💠 传送点可以直接传送</small></div>
+          <canvas id="bigmap-canvas" width="1000" height="600"></canvas>
+          <button class="genshin-btn" id="btn-close-bigmap">关闭</button>
+        </div>
       </div>
 
       <div class="region-enter-prompt hidden" id="region-enter-prompt">
@@ -810,6 +821,7 @@
           <div class="enemy-hp-bar"><div class="enemy-hp-fill" id="enemy-hp-fill"></div></div>
           <div class="enemy-hp-text" id="enemy-hp-text">100/100</div>
           <div class="enemy-stats" id="enemy-stats">⚔️ 12 · 🛡️ 0</div>
+          <div class="enemy-shield hidden" id="enemy-shield">🛡️ 护盾：先破盾才能造成伤害</div>
         </div>
         <div class="battle-timer" id="battle-timer">∞</div>
       </div>
@@ -1031,8 +1043,8 @@
     </section>
   </div>
 
-  <script src="js/data.js?v=6.3"></script>
-  <script src="js/learning.js?v=6.3"></script>
-  <script src="js/game.js?v=6.3"></script>
+  <script src="js/data.js?v=6.4"></script>
+  <script src="js/learning.js?v=6.4"></script>
+  <script src="js/game.js?v=6.4"></script>
 </body>
 </html>

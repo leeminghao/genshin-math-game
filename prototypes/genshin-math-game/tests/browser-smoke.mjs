@@ -276,13 +276,33 @@ async function solveBattle() {
         if (q.interaction.type === 'tapCount') {
           [...document.querySelectorAll('.tapcount-cell')].slice(0, q.interaction.target).forEach(c => c.click());
         } else if (q.interaction.type === 'dragSplit') {
-          const zones = [...document.querySelectorAll('.dragsplit-zone')];
-          const items = [...document.querySelectorAll('.dragsplit-item')];
-          const per = Math.floor(q.interaction.total / q.interaction.zones);
-          items.forEach((item, i) => { zones[Math.floor(i / per)].click(); item.click(); });
+          const cfg = q.interaction;
+          const targets = cfg.ratio
+            ? cfg.ratio.map(r => Math.round(cfg.total * r / cfg.ratio.reduce((a, b) => a + b, 0)))
+            : Array(cfg.zones).fill(Math.floor(cfg.total / cfg.zones));
+          for (let guard = 0; guard < 80; guard++) {
+            const it = window.__game.session.currentInteraction;
+            if (!it || it.type !== 'dragSplit') break;
+            const zones = [...document.querySelectorAll('.dragsplit-zone')];
+            const overIdx = it.zones.findIndex((c, i) => c > targets[i]);
+            const underIdx = it.zones.findIndex((c, i) => c < targets[i]);
+            if (overIdx === -1 && underIdx === -1 && it.remaining === 0) break;
+            if (overIdx !== -1) {
+              zones[overIdx].click();
+              document.querySelector('.dragsplit-undo').click();
+            } else if (it.remaining > 0 && underIdx !== -1) {
+              zones[underIdx].click();
+              document.querySelector('.dragsplit-item')?.click();
+            } else if (it.remaining > 0) {
+              document.querySelector('.dragsplit-item')?.click();
+            } else break;
+          }
         } else if (q.interaction.type === 'shapePick') {
           const cards = [...document.querySelectorAll('.shapepick-card')];
           q.interaction.items.forEach((item, i) => { if (item.match) cards[i].click(); });
+        } else if (q.interaction.type === 'balance') {
+          const need = q.interaction.left - (q.interaction.rightStart || 0);
+          for (let i = 0; i < need; i++) document.querySelector('#battle-balance-add').click();
         }
         document.querySelector('.interaction-confirm-bar .genshin-btn').click();
         return;
@@ -642,6 +662,8 @@ try {
   assert.equal(report.worldChanges.windmill, true);
   assert.equal(report.worldChanges.bridge, true);
   assert.equal(report.worldChanges.storm, true);
+  // 提示弹窗期间 controlsLocked=true，按键会被吞；等提示关闭再移动
+  await waitFor('document.querySelector("#hint-modal").classList.contains("hidden")');
   await press('s', 'KeyS', 83, 1600);
   assert.ok(await evaluate('Math.hypot(window.__game.session.playerX-350,window.__game.session.playerY-300) > 100'));
   await evaluate('document.querySelector("#btn-learning-profile").click()');
@@ -882,6 +904,103 @@ try {
   await finishDialog();
   await solveBattle();
   assert.ok(await evaluate('window.__game.state.player.completedLevels.includes("1-0")'));
+
+  stage('Boss 破盾小题与区域签名交互');
+  // 3-8 Boss（数组下标 4）：护盾挡住首题进度，破盾后才掉血
+  await evaluate('window.__game.session.mapActive=false;window.__game.startLevel(3,4)');
+  await finishDialog();
+  await waitFor('document.querySelector(".screen.active")?.id === "battle-screen"');
+  report.boss = await evaluate(`({
+    shieldVisible: !document.querySelector('#enemy-shield').classList.contains('hidden'),
+    bossName: document.querySelector('#enemy-name').textContent,
+    enemyHp: window.__game.session.enemyHp
+  })`);
+  assert.equal(report.boss.shieldVisible, true, 'Boss 应有护盾');
+  assert.match(report.boss.bossName, /BOSS/);
+  // 破盾题（dragSplit 均分 12 进 3）
+  await evaluate(`(() => {
+    const zones = [...document.querySelectorAll('.dragsplit-zone')];
+    for (let z = 0; z < 3; z++) {
+      zones[z].click();
+      for (let i = 0; i < 4; i++) document.querySelector('.dragsplit-item')?.click();
+    }
+    document.querySelector('.interaction-confirm-bar .genshin-btn').click();
+  })()`);
+  await waitFor('window.__game.session.bossShield === false && window.__game.session.currentQuestionIndex === 1', 15000);
+  report.bossBreak = await evaluate(`({
+    enemyHp: window.__game.session.enemyHp,
+    enemyMax: window.__game.session.enemyMaxHp,
+    shieldGone: document.querySelector('#enemy-shield').classList.contains('hidden')
+  })`);
+  assert.equal(report.bossBreak.enemyHp, report.bossBreak.enemyMax, '破盾题不掉血');
+  assert.equal(report.bossBreak.shieldGone, true);
+  // 完成 Boss 关
+  await evaluate(`(() => {
+    const q = window.__game.session.currentQuestions[window.__game.session.currentQuestionIndex];
+    [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) === String(q.answer)).click();
+  })()`);
+  await waitFor('window.__game.session.currentQuestionIndex === 2 && window.__game.session.answered === false', 15000);
+  await evaluate(`(() => {
+    const q = window.__game.session.currentQuestions[window.__game.session.currentQuestionIndex];
+    [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) === String(q.answer)).click();
+  })()`);
+  await waitFor('document.querySelector(".screen.active")?.id === "reward-screen"', 15000);
+  assert.ok(await evaluate('window.__game.state.player.completedLevels.includes("3-8")'));
+  // 签名交互：4-1 balance 神秘盒、3-1 移多补少、5-7 按比分配（数组下标 1/1/3）可被 solveBattle 通关
+  for (const [rid, idx, levelId] of [[4, 1, '4-1'], [3, 1, '3-1'], [5, 3, '5-7']]) {
+    await evaluate(`window.__game.startLevel(${rid},${idx})`);
+    await finishDialog();
+    await solveBattle();
+    assert.ok(await evaluate(`window.__game.state.player.completedLevels.includes('${levelId}')`), `${levelId} 应通关`);
+  }
+
+  stage('全屏探险地图：打开、传送、迷雾');
+  await fresh();
+  await evaluate('document.querySelector("#btn-bigmap").click()');
+  await waitFor('!document.querySelector("#bigmap-modal").classList.contains("hidden")');
+  await sleep(1300); // 等首帧与一次定时重绘完成
+  report.bigmap = await evaluate(`(() => {
+    const canvas = document.querySelector('#bigmap-canvas');
+    const ctx = canvas.getContext('2d');
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let strong = 0;
+    for (let i = 0; i < data.length; i += 400) {
+      if (Math.abs(data[i] - 26) + Math.abs(data[i + 1] - 35) + Math.abs(data[i + 2] - 50) > 30) strong++;
+    }
+    return {
+      drawn: strong > 100,
+      locked: window.__game.session.controlsLocked,
+      waypointCount: document.querySelectorAll('.waypoint').length
+    };
+  })()`);
+  assert.equal(report.bigmap.drawn, true, '大地图应有内容绘制');
+  assert.equal(report.bigmap.locked, true, '打开大地图应锁控制');
+  assert.equal(report.bigmap.waypointCount, 10, '应有 10 个传送点');
+  // 点未激活传送点 → 提示不传送；激活后点击 → 传送
+  await evaluate(`(() => {
+    const canvas = document.querySelector('#bigmap-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const x = 3200 / 10000 * rect.width + rect.left;
+    const y = 1700 / 6000 * rect.height + rect.top;
+    canvas.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }));
+  })()`);
+  assert.equal(await evaluate('Math.round(window.__game.session.playerX)'), 1400, '未激活传送点不应传送');
+  await evaluate('window.__game.session.activatedWaypoints.push(1); window.__game.state.map.activatedWaypoints.push(1)');
+  await evaluate('document.querySelector("#btn-bigmap").click() && 0');
+  await evaluate(`(() => {
+    const canvas = document.querySelector('#bigmap-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const x = 3200 / 10000 * rect.width + rect.left;
+    const y = 1700 / 6000 * rect.height + rect.top;
+    canvas.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }));
+  })()`);
+  await sleep(400);
+  report.bigmapTeleport = await evaluate(`({
+    x: Math.round(window.__game.session.playerX),
+    closed: document.querySelector('#bigmap-modal').classList.contains('hidden')
+  })`);
+  assert.equal(report.bigmapTeleport.x, 3200, '已激活传送点应传送');
+  assert.equal(report.bigmapTeleport.closed, true, '传送后应关闭大地图');
 
   stage('弹窗锁移动、损坏存档与旧存档迁移');
   await fresh();

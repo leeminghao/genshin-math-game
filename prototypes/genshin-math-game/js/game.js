@@ -468,6 +468,7 @@ window.addEventListener('unhandledrejection', function(e) {
     itemShield: false,         // 护盾符文：抵挡一次怪物攻击
     enemyStunned: false,       // 弱点破防/武器震慑：怪物下一次攻击无效
     usedActiveSkills: [],      // 本场战斗已用的主动技能
+    bossShield: false,         // Boss 护盾：首题（破盾题）答对前不掉血
     // 目标光柱（会话级，不持久化）
     beamUntil: 0,
     beamCooldownUntil: 0,
@@ -847,6 +848,7 @@ window.addEventListener('unhandledrejection', function(e) {
       itemShield: false,
       enemyStunned: false,
       usedActiveSkills: [],
+      bossShield: false,
       beamUntil: 0,
       beamCooldownUntil: 0,
       lastProgressAt: 0,
@@ -865,7 +867,7 @@ window.addEventListener('unhandledrejection', function(e) {
     $$('.material').forEach(item => item.classList.remove('collected'));
     $$('.hidden-area').forEach(area => area.classList.remove('discovered'));
     $$('.story-trigger').forEach(trigger => { trigger.dataset.triggered = 'false'; });
-    ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal', 'shop-modal', 'mechanism-panel'].forEach(id => {
+    ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal', 'shop-modal', 'mechanism-panel', 'bigmap-modal'].forEach(id => {
       $('#' + id)?.classList.add('hidden');
     });
     updateMapHud();
@@ -896,7 +898,7 @@ window.addEventListener('unhandledrejection', function(e) {
   }
 
   function syncControlsLock() {
-    const overlayIds = ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal', 'shop-modal', 'mechanism-panel'];
+    const overlayIds = ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal', 'shop-modal', 'mechanism-panel', 'bigmap-modal'];
     session.controlsLocked = overlayIds.some(id => !$('#' + id)?.classList.contains('hidden'));
     if (session.controlsLocked) stopMapMovement();
   }
@@ -1097,6 +1099,10 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#btn-wardrobe').addEventListener('click', openWardrobe);
     $('#btn-shop').addEventListener('click', () => { sfx('click'); openShop('weapons'); });
     $('#btn-map-shop').addEventListener('click', () => { sfx('click'); openShop('weapons'); });
+    $('#btn-bigmap')?.addEventListener('click', () => { sfx('click'); openBigmap(); });
+    $('#btn-close-bigmap')?.addEventListener('click', closeBigmap);
+    $('#bigmap-overlay')?.addEventListener('click', closeBigmap);
+    $('#bigmap-canvas')?.addEventListener('click', handleBigmapClick);
     $('#btn-close-shop').addEventListener('click', closeShop);
     $('#shop-overlay').addEventListener('click', closeShop);
     $$('.shop-tab').forEach(btn => {
@@ -1182,6 +1188,11 @@ window.addEventListener('unhandledrejection', function(e) {
         session.moveMode = 'keyboard';
       }
       const actionKey = String(e.key || '').toLowerCase();
+      if (actionKey === 'm' && session.mapActive && !session.controlsLocked) {
+        e.preventDefault();
+        openBigmap();
+        return;
+      }
       if (actionKey === 'enter' || actionKey === ' ') {
         if (!session.enterPromptHidden && session.currentLandmark !== null) {
           e.preventDefault();
@@ -3430,6 +3441,220 @@ window.addEventListener('unhandledrejection', function(e) {
     });
   }
 
+  // ========== 全屏探险地图 ==========
+  function openBigmap() {
+    drawBigmap();
+    $('#bigmap-modal').classList.remove('hidden');
+    syncControlsLock();
+    // 目标脉动圈需要重绘：打开期间 500ms 刷新一次
+    if (session.bigmapTimer) clearInterval(session.bigmapTimer);
+    session.bigmapTimer = setInterval(() => {
+      if ($('#bigmap-modal').classList.contains('hidden')) {
+        clearInterval(session.bigmapTimer);
+        session.bigmapTimer = null;
+        return;
+      }
+      drawBigmap();
+    }, 500);
+    trackEvent('bigmap_open');
+  }
+
+  function closeBigmap() {
+    $('#bigmap-modal').classList.add('hidden');
+    if (session.bigmapTimer) {
+      clearInterval(session.bigmapTimer);
+      session.bigmapTimer = null;
+    }
+    syncControlsLock();
+    focusWorldMap();
+  }
+
+  function drawBigmap() {
+    const canvas = $('#bigmap-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    const scaleX = w / WORLD.W;
+    const scaleY = h / WORLD.H;
+    const hexToRgba = (hex, alpha) => {
+      const value = parseInt(hex.slice(1), 16);
+      return `rgba(${(value >> 16) & 255},${(value >> 8) & 255},${value & 255},${alpha})`;
+    };
+
+    // 深色底 + 地形简图
+    ctx.fillStyle = '#1a2332';
+    ctx.fillRect(0, 0, w, h);
+    if (LAYOUT && Array.isArray(LAYOUT.blobs)) {
+      LAYOUT.blobs.forEach(b => {
+        const alpha = b.kind === 'sea' ? 0.6 : b.kind === 'lake' ? 0.55 : 0.3;
+        const x = b.x * scaleX, y = b.y * scaleY;
+        const rx = b.rx * scaleX, ry = b.ry * scaleY;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate((b.rot * Math.PI) / 180);
+        const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(rx, ry));
+        grad.addColorStop(0, hexToRgba(b.color, alpha));
+        grad.addColorStop(1, hexToRgba(b.color, 0));
+        ctx.fillStyle = grad;
+        ctx.scale(1, ry / rx);
+        ctx.beginPath(); ctx.arc(0, 0, rx, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      });
+    }
+
+    // 道路
+    ctx.strokeStyle = 'rgba(200,176,138,0.6)';
+    ctx.lineWidth = 2;
+    if (LAYOUT && Array.isArray(LAYOUT.roads)) {
+      LAYOUT.roads.forEach(road => {
+        ctx.beginPath();
+        road.forEach((p, i) => {
+          const x = p[0] * scaleX;
+          const y = p[1] * scaleY;
+          if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        });
+        ctx.stroke();
+      });
+    }
+
+    // 未解锁区域迷雾：暗色罩住，只露轮廓
+    $$('.landmark').forEach(lm => {
+      const rid = parseInt(lm.dataset.region);
+      if (state.player.unlockedRegions.includes(rid)) return;
+      const x = parseInt(lm.style.left) * scaleX;
+      const y = parseInt(lm.style.top) * scaleY;
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, 60);
+      grad.addColorStop(0, 'rgba(5,10,16,0.75)');
+      grad.addColorStop(1, 'rgba(5,10,16,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(x, y, 60, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // 地标：大图标 + 名称（未解锁灰显带锁）
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 4;
+    $$('.landmark').forEach(lm => {
+      const rid = parseInt(lm.dataset.region);
+      const x = parseInt(lm.style.left) * scaleX;
+      const y = parseInt(lm.style.top) * scaleY;
+      const unlocked = state.player.unlockedRegions.includes(rid);
+      const region = REGIONS[rid];
+      ctx.font = '22px sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.globalAlpha = unlocked ? 1 : 0.35;
+      ctx.fillText(region?.emoji || '❔', x, y);
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillStyle = unlocked ? '#fff4d6' : '#77808c';
+      ctx.fillText(region?.name || '未知', x, y + 23);
+      if (!unlocked) {
+        ctx.font = '12px sans-serif';
+        ctx.fillText('🔒', x + 18, y - 14);
+      }
+      ctx.globalAlpha = 1;
+    });
+    ctx.shadowBlur = 0;
+
+    // 机关：未修复的只画 🔧 图标（机关密集，名字会糊成一团，详情靠小地图和光柱）
+    Object.values(MECHANISMS).forEach(mech => {
+      if (mech.restored()) return;
+      const x = mech.x * scaleX;
+      const y = mech.y * scaleY;
+      ctx.font = '15px sans-serif';
+      ctx.fillText('🔧', x, y);
+    });
+
+    // 传送点：💠 + 名称；已激活亮色，未激活暗色
+    $$('.waypoint').forEach(wp => {
+      const wid = parseInt(wp.dataset.waypoint);
+      const x = parseInt(wp.style.left) * scaleX;
+      const y = parseInt(wp.style.top) * scaleY;
+      const active = session.activatedWaypoints.includes(wid);
+      const label = wp.querySelector('.waypoint-label')?.textContent || '';
+      ctx.font = '15px sans-serif';
+      ctx.globalAlpha = active ? 1 : 0.45;
+      ctx.fillText('💠', x, y);
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = active ? '#9fd6e3' : '#77808c';
+      ctx.fillText(label, x, y + 15);
+      ctx.globalAlpha = 1;
+      if (active) {
+        ctx.strokeStyle = 'rgba(82,184,198,0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2); ctx.stroke();
+      }
+    });
+
+    // 当前目标：金色脉动圈（与光柱同一目标）
+    const target = currentObjectiveTarget();
+    if (target) {
+      const x = target.x * scaleX;
+      const y = target.y * scaleY;
+      const pulse = (performance.now() % 1200) / 1200;
+      ctx.strokeStyle = `rgba(231,185,87,${0.8 - pulse * 0.4})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x, y, 12 + pulse * 6, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    // 玩家位置：金色圆点 + 白圈
+    const px = session.playerX * scaleX;
+    const py = session.playerY * scaleY;
+    ctx.fillStyle = '#ffd964';
+    ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  // 点击已激活传送点传送
+  function teleportToWaypoint(wid) {
+    const wp = $(`#waypoint-${wid}`);
+    if (!wp) return;
+    const wx = parseInt(wp.style.left);
+    const wy = parseInt(wp.style.top);
+    session.playerX = Math.max(60, Math.min(WORLD.W - 60, wx));
+    session.playerY = Math.max(60, Math.min(WORLD.H - 60, wy + 90));
+    session.targetX = session.playerX;
+    session.targetY = session.playerY;
+    session.isMoving = false;
+    session.moveMode = null;
+    updatePlayerSprite();
+    updateCamera();
+    closeBigmap();
+    sfx('burst');
+    showHint(`已传送到「${wp.querySelector('.waypoint-label')?.textContent || '传送点'}」！`);
+    trackEvent('waypoint_teleport', { waypoint: wid });
+  }
+
+  function handleBigmapClick(e) {
+    const canvas = $('#bigmap-canvas');
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const worldX = ((e.clientX - rect.left) * scaleX) / (canvas.width / WORLD.W);
+    const worldY = ((e.clientY - rect.top) * scaleY) / (canvas.height / WORLD.H);
+    let hit = null;
+    let hitDist = Infinity;
+    $$('.waypoint').forEach(wp => {
+      const wid = parseInt(wp.dataset.waypoint);
+      const x = parseInt(wp.style.left);
+      const y = parseInt(wp.style.top);
+      const dist = Math.hypot(worldX - x, worldY - y);
+      if (dist < 260 && dist < hitDist) {
+        hit = wid;
+        hitDist = dist;
+      }
+    });
+    if (hit === null) return;
+    if (!session.activatedWaypoints.includes(hit)) {
+      showHint('这个传送点还没激活，先跑到它旁边点亮吧！');
+      return;
+    }
+    teleportToWaypoint(hit);
+  }
+
   // 激活传送点
   function activateWaypoint(wid) {
     if (!session.activatedWaypoints.includes(wid)) {
@@ -3930,6 +4155,7 @@ window.addEventListener('unhandledrejection', function(e) {
     session.itemShield = false;
     session.enemyStunned = false;
     session.usedActiveSkills = [];
+    session.bossShield = level.boss === true;
 
     // 使用动态生成的题目（如果有），否则用静态题目
     let questions = null;
@@ -4937,6 +5163,12 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#enemy-sprite').classList.remove('shake', 'defeated', 'stunned');
     const enemyStatsEl = $('#enemy-stats');
     if (enemyStatsEl) enemyStatsEl.textContent = `⚔️ ${getEnemyAttack()} · 🛡️ ${getEnemyDefense()}`;
+    // Boss 护盾：首题答对前不掉血
+    const shieldEl = $('#enemy-shield');
+    if (shieldEl) shieldEl.classList.toggle('hidden', !session.bossShield);
+    if (session.bossShield) {
+      $('#enemy-name').textContent = `${region.enemyName} · BOSS`;
+    }
     $('#question-tag').textContent = ELEMENTS.find(e => e.id === level.skill)?.name || '数学思维';
     $('#question-tag').style.background = ELEMENTS.find(e => e.id === level.skill)?.color || '#74c2a8';
     // 全部元素技能保持可点：本关元素给出专属提示，其他元素消耗能量，用于连续触发元素反应
@@ -5111,6 +5343,65 @@ window.addEventListener('unhandledrejection', function(e) {
     if (cfg.type === 'tapCount') renderTapCount(cfg, container);
     else if (cfg.type === 'dragSplit') renderDragSplit(cfg, container);
     else if (cfg.type === 'shapePick') renderShapePick(cfg, container);
+    else if (cfg.type === 'balance') renderBattleBalance(cfg, container);
+  }
+
+  // balance 天平配平（战斗版）：左盘锁定，右盘孩子调整，横梁实时倾斜
+  function renderBattleBalance(cfg, container) {
+    const it = { type: 'balance', placed: cfg.rightStart || 0, cfg };
+    session.currentInteraction = it;
+
+    const hint = document.createElement('div');
+    hint.className = 'dragsplit-hint';
+    hint.textContent = cfg.hintText || '放砝码让天平平衡，再点确认';
+
+    const beam = document.createElement('div');
+    beam.className = 'mech-beam';
+    const counter = document.createElement('div');
+    counter.className = 'tapcount-counter';
+
+    const render = () => {
+      const tilt = Math.max(-16, Math.min(16, (cfg.left - it.placed) * 4));
+      beam.style.transform = `rotate(${tilt}deg)`;
+      beam.innerHTML = `<span class="mech-pan">${cfg.itemEmoji.repeat(cfg.left)}<small>左 ${cfg.left}${cfg.unit || ''}</small></span>` +
+        `<span class="mech-pivot">⚖️</span>` +
+        `<span class="mech-pan">${cfg.itemEmoji.repeat(it.placed) || '◌'}<small>右 ${it.placed}${cfg.unit || ''}</small></span>`;
+      counter.textContent = it.placed === cfg.left ? '平衡了！点确认' : `左 ${cfg.left} · 右 ${it.placed}`;
+      addBtn.disabled = session.answered || it.placed >= cfg.left + 3;
+      takeBtn.disabled = session.answered || it.placed <= 0;
+    };
+
+    const actions = document.createElement('div');
+    actions.className = 'mech-actions';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'genshin-btn small';
+    addBtn.id = 'battle-balance-add';
+    addBtn.textContent = '放一个';
+    addBtn.addEventListener('click', () => {
+      if (session.answered || it.placed >= cfg.left + 3) return;
+      it.placed++;
+      sfx('click');
+      render();
+    });
+    const takeBtn = document.createElement('button');
+    takeBtn.className = 'genshin-btn small';
+    takeBtn.id = 'battle-balance-take';
+    takeBtn.textContent = '取一个';
+    takeBtn.addEventListener('click', () => {
+      if (session.answered || it.placed <= 0) return;
+      it.placed--;
+      sfx('click');
+      render();
+    });
+    actions.appendChild(addBtn);
+    actions.appendChild(takeBtn);
+
+    container.appendChild(hint);
+    container.appendChild(beam);
+    container.appendChild(counter);
+    container.appendChild(actions);
+    render();
+    makeInteractionConfirm(container, () => it.placed === cfg.left);
   }
 
   // shapePick 图形辨认：从一堆物件中点选所有符合特征的（分类思想）
@@ -5240,10 +5531,11 @@ window.addEventListener('unhandledrejection', function(e) {
   function renderDragSplit(cfg, container) {
     const zoneCount = cfg.zones;
     const perZone = Math.floor(cfg.total / zoneCount);
+    const initial = Array.isArray(cfg.initialZones) ? cfg.initialZones : null;
     const it = {
       type: 'dragSplit',
-      remaining: cfg.total,
-      zones: Array.from({ length: zoneCount }, () => 0),
+      remaining: cfg.total - (initial ? initial.reduce((a, b) => a + b, 0) : 0),
+      zones: initial ? [...initial] : Array.from({ length: zoneCount }, () => 0),
       activeZone: 0,
       cfg
     };
@@ -5251,27 +5543,14 @@ window.addEventListener('unhandledrejection', function(e) {
 
     const hint = document.createElement('div');
     hint.className = 'dragsplit-hint';
-    hint.textContent = `先点一辆矿车选中它，再点岩核装进去。每辆矿车装一样多才公平！`;
+    hint.textContent = Array.isArray(cfg.ratio)
+      ? `按 ${cfg.ratio.join(':')} 分：点区域选中，再点物件装入；点「退回」可取出`
+      : initial
+        ? '有多有少不公平！点区域选中，用「退回」取出多的，再装入少的'
+        : `先点一辆矿车选中它，再点岩核装进去。每辆矿车装一样多才公平！`;
 
     const pool = document.createElement('div');
     pool.className = 'dragsplit-pool';
-    const poolItems = [];
-    for (let index = 0; index < cfg.total; index++) {
-      const item = document.createElement('button');
-      item.className = 'dragsplit-item';
-      item.textContent = cfg.item;
-      item.addEventListener('click', () => {
-        if (session.answered || item.disabled) return;
-        item.disabled = true;
-        item.classList.add('placed');
-        it.remaining--;
-        it.zones[it.activeZone]++;
-        sfx('click');
-        refresh();
-      });
-      pool.appendChild(item);
-      poolItems.push(item);
-    }
 
     const zoneBar = document.createElement('div');
     zoneBar.className = 'dragsplit-zones';
@@ -5291,31 +5570,39 @@ window.addEventListener('unhandledrejection', function(e) {
     }
 
     function refresh() {
+      // 动态物件池：显示当前可分配的剩余物件
+      pool.innerHTML = '';
+      for (let index = 0; index < it.remaining; index++) {
+        const item = document.createElement('button');
+        item.className = 'dragsplit-item';
+        item.textContent = cfg.item;
+        item.addEventListener('click', () => {
+          if (session.answered || it.remaining <= 0) return;
+          it.remaining--;
+          it.zones[it.activeZone]++;
+          sfx('click');
+          refresh();
+        });
+        pool.appendChild(item);
+      }
       zoneEls.forEach((el, z) => {
         el.innerHTML = `${cfg.zoneEmoji} ${cfg.zoneName} ${z + 1}<br><strong>${'●'.repeat(it.zones[z]) || '空'}</strong><br><span>${it.zones[z]} 块</span>`;
       });
-      hint.textContent = it.remaining > 0
-        ? `还剩 ${it.remaining} 块岩核。点矿车切换，点岩核装入。`
-        : '全部装完了，检查一下每辆是不是一样多！';
+      undo.disabled = it.zones[it.activeZone] <= 0;
+      hint.textContent = Array.isArray(cfg.ratio)
+        ? `按 ${cfg.ratio.join(':')} 分（待分 ${it.remaining}）`
+        : it.remaining > 0
+          ? `还剩 ${it.remaining} 个待分配`
+          : '分完了，检查每个区域是不是一样多！';
     }
-    refresh();
 
     const undo = document.createElement('button');
     undo.className = 'genshin-btn small dragsplit-undo';
-    undo.textContent = '↩️ 从当前矿车退回一块';
+    undo.textContent = '↩️ 从当前区域退回一个';
     undo.addEventListener('click', () => {
       if (session.answered || it.zones[it.activeZone] <= 0) return;
       it.zones[it.activeZone]--;
       it.remaining++;
-      const item = poolItems.find(el => el.disabled);
-      // 退回最近放置的一块（从后往前找）
-      for (let i = poolItems.length - 1; i >= 0; i--) {
-        if (poolItems[i].disabled) {
-          poolItems[i].disabled = false;
-          poolItems[i].classList.remove('placed');
-          break;
-        }
-      }
       sfx('click');
       refresh();
     });
@@ -5324,8 +5611,13 @@ window.addEventListener('unhandledrejection', function(e) {
     container.appendChild(pool);
     container.appendChild(zoneBar);
     container.appendChild(undo);
+    refresh();
     makeInteractionConfirm(container, () => {
       if (it.remaining > 0) return false;
+      if (Array.isArray(cfg.ratio)) {
+        const ratioSum = cfg.ratio.reduce((a, b) => a + b, 0);
+        return it.zones.every((count, i) => count === Math.round(cfg.total * cfg.ratio[i] / ratioSum));
+      }
       return it.zones.every(count => count === perZone);
     });
   }
@@ -5353,6 +5645,27 @@ window.addEventListener('unhandledrejection', function(e) {
     });
 
     if (correct) {
+      // Boss 护盾：首题（破盾题）答对只破盾不掉血，物理演出优先
+      if (session.bossShield && questionIndex === 0) {
+        session.bossShield = false;
+        session.correctStreak++;
+        state.player.answerStreak++;
+        sfx('burst');
+        showStunOverlay('🛡️💥 护盾破碎！');
+        $('#enemy-shield')?.classList.add('hidden');
+        $('#enemy-sprite').classList.add('shake');
+        setTimeout(() => $('#enemy-sprite').classList.remove('shake'), 400);
+        trackEvent('boss_shield_break', { levelId: session.currentLevel.id });
+        updateHud();
+        saveGame();
+        session.answerTimer = setTimeout(() => {
+          session.answerTimer = null;
+          if (session.battleResolved) return;
+          session.currentQuestionIndex++;
+          renderBattleQuestion();
+        }, 900);
+        return;
+      }
       session.correctStreak++;
       state.player.answerStreak++;
       const damage = Math.ceil(session.enemyMaxHp / session.currentQuestions.length);
