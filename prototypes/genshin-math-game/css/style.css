@@ -4824,3 +4824,21 @@ html.reduced-motion *::after {
   0%, 100% { box-shadow: 0 0 4px rgba(79,195,247,0.4); }
   50% { box-shadow: 0 0 14px rgba(79,195,247,0.9); }
 }
+
+
+/* ========== 数学视野：高亮可交互物 ========== */
+.vision-mark {
+  outline: 3px solid rgba(255, 223, 120, 0.9);
+  outline-offset: 3px;
+  border-radius: 50%;
+  animation: vision-pulse 0.9s ease-in-out infinite;
+  z-index: 8 !important;
+}
+@keyframes vision-pulse {
+  0%, 100% { outline-color: rgba(255, 223, 120, 0.9); }
+  50% { outline-color: rgba(255, 223, 120, 0.25); }
+}
+#btn-math-vision.cooling {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}

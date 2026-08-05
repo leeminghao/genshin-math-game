@@ -313,6 +313,14 @@ async function solveBattle() {
       await waitFor(`window.__game.session.currentQuestionIndex === ${index + 1} && window.__game.session.answered === false`);
     }
   }
+  // 全独立答对可能触发灵感挑战（900ms 后出现）：先等挑战或结算任一出现
+  await waitFor('window.__game.session.challengeActive === true || document.querySelector(".screen.active")?.id === "reward-screen"');
+  if (await evaluate('window.__game.session.challengeActive === true')) {
+    await evaluate(`(() => {
+      const q = window.__game.session.challengeQuestion;
+      [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) === String(q.answer)).click();
+    })()`);
+  }
   await waitFor('document.querySelector(".screen.active")?.id === "reward-screen"');
 }
 
@@ -1001,6 +1009,52 @@ try {
   })`);
   assert.equal(report.bigmapTeleport.x, 3200, '已激活传送点应传送');
   assert.equal(report.bigmapTeleport.closed, true, '传送后应关闭大地图');
+
+  stage('自适应上调：连对触发灵感挑战 + 数学视野');
+  // 灵感挑战：2-0 三题全独立答对 → 出难一档变式
+  await evaluate('window.__game.session.mapActive=false;window.__game.startLevel(2,0)');
+  await finishDialog();
+  await waitFor('document.querySelector(".screen.active")?.id === "battle-screen"');
+  const gemsBeforeBattle = await evaluate('window.__game.state.player.gems');
+  for (let i = 0; i < 3; i++) {
+    await evaluate(`(() => {
+      const q = window.__game.session.currentQuestions[window.__game.session.currentQuestionIndex];
+      [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) === String(q.answer)).click();
+    })()`);
+    if (i < 2) await waitFor(`window.__game.session.currentQuestionIndex === ${i + 1} && window.__game.session.answered === false`);
+  }
+  await waitFor('document.querySelector("#question-tag").textContent.includes("灵感挑战")', 8000);
+  report.challenge = await evaluate(`({
+    active: window.__game.session.challengeActive,
+    tag: document.querySelector('#question-tag').textContent,
+    perfect: window.__game.session.perfectStreak
+  })`);
+  assert.equal(report.challenge.active, true, '应触发灵感挑战');
+  assert.match(report.challenge.tag, /灵感挑战/);
+  // 答对挑战题 → 额外 30 钻石
+  await evaluate(`(() => {
+    const q = window.__game.session.challengeQuestion;
+    [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) === String(q.answer)).click();
+  })()`);
+  await waitFor('document.querySelector(".screen.active")?.id === "reward-screen"', 8000);
+  assert.ok(await evaluate('window.__game.state.player.gems') >= gemsBeforeBattle + 90, '首通60+挑战30 至少应得 90 钻石（成就另计）');
+  // 数学视野：高亮附近可交互物 + 冷却
+  await fresh();
+  await evaluate(`Object.assign(window.__game.session,{playerX:1500,playerY:2300,targetX:1500,targetY:2300,isMoving:false,moveMode:null});window.__game.updatePlayerSprite()`);
+  await sleep(600);
+  await evaluate('document.querySelector("#btn-math-vision").click()');
+  await sleep(400);
+  report.vision = await evaluate(`({
+    marks: document.querySelectorAll('.vision-mark').length,
+    cooling: document.querySelector('#btn-math-vision').classList.contains('cooling')
+  })`);
+  assert.ok(report.vision.marks > 0, '数学视野应高亮附近可交互物');
+  assert.equal(report.vision.cooling, true, '使用后应进入冷却');
+  // 首个提示期间 controlsLocked=true，会挡住第二次激活；等提示关闭再点
+  await waitFor('document.querySelector("#hint-modal").classList.contains("hidden")');
+  await evaluate('document.querySelector("#btn-math-vision").click()');
+  report.visionCooldownHint = await evaluate('document.querySelector("#hint-text").textContent');
+  assert.match(report.visionCooldownHint, /恢复/);
 
   stage('弹窗锁移动、损坏存档与旧存档迁移');
   await fresh();

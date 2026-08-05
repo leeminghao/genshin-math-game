@@ -388,6 +388,38 @@ window.addEventListener('unhandledrejection', function(e) {
   };
   const DEFAULT_REACTION = { name: '元素共鸣', effect: 'energy', value: 10, desc: '元素共鸣，能量 +10' };
 
+  // 灵感挑战：连续 3 题独立答对后触发的难一档变式题（只上调，答错无惩罚）
+  const CHALLENGE_QUESTIONS = {
+    anemo: [
+      { text: '灵感挑战：48 + 37 + 25 = ?', options: [100, 105, 110, 120], answer: 110, hint: '先凑整：48 + 25 = 73… 73 + 37 = 110。' },
+      { text: '灵感挑战：7 × 8 + 16 = ?', options: [56, 62, 72, 80], answer: 72, hint: '7 × 8 = 56，56 + 16 = 72。' }
+    ],
+    geo: [
+      { text: '灵感挑战：长方形长 9 宽 6，剪掉一个边长 2 的正方形，剩下的面积是多少？', options: [50, 52, 54, 56], answer: 50, hint: '9 × 6 = 54，2 × 2 = 4，54 - 4 = 50。' },
+      { text: '灵感挑战：一个三角形两条边是 5cm 和 7cm，第三条边可能是多长？', options: ['1cm', '2cm', '5cm', '13cm'], answer: '5cm', hint: '两边之和大于第三边：5 + 5 > 7 可以，1、2、13 都不行。' }
+    ],
+    electro: [
+      { text: '灵感挑战：2.5 千克等于多少克？', options: [250, 2500, 2050, 5000], answer: 2500, hint: '1 千克 = 1000 克，2.5 × 1000 = 2500。' },
+      { text: '灵感挑战：1 元 3 角 5 分 + 6 角 5 分 = ？元', options: [1.4, 1.7, 2, 2.1], answer: 2, hint: '3 角 5 分 + 6 角 5 分 = 1 元，1 + 1 = 2 元。' }
+    ],
+    dendro: [
+      { text: '灵感挑战：4、5、8、x 四个数的平均数是 6，x 是多少？', options: [5, 6, 7, 8], answer: 7, hint: '总数 6 × 4 = 24，24 - 4 - 5 - 8 = 7。' },
+      { text: '灵感挑战：袋子里有 3 红球 2 白球，摸一个球是红球的可能性是多少？', options: ['1/2', '2/5', '3/5', '3/4'], answer: '3/5', hint: '3 ÷ (3+2) = 3/5。' }
+    ],
+    hydro: [
+      { text: '灵感挑战：2x + 4 = 18，x = ?', options: [5, 6, 7, 8], answer: 7, hint: '2x = 14，x = 7。' },
+      { text: '灵感挑战：-6 + 13 - 4 = ?', options: ['-3', '3', '7', '11'], answer: '3', hint: '-6 + 13 = 7，7 - 4 = 3。' }
+    ],
+    pyro: [
+      { text: '灵感挑战：240 的 35% 是多少？', options: [70, 80, 84, 96], answer: 84, hint: '240 × 0.35 = 84。' },
+      { text: '灵感挑战：一本书 120 页，第一天看了 1/4，第二天看了 1/3，还剩多少页？', options: [40, 50, 60, 70], answer: 50, hint: '120 - 30 - 40 = 50。' }
+    ],
+    cryo: [
+      { text: '灵感挑战：早晨 -4℃，中午上升 11℃，夜里又降 8℃，夜里多少度？', options: ['-1', '0', '1', '3'], answer: '-1', hint: '-4 + 11 = 7，7 - 8 = -1。' },
+      { text: '灵感挑战：圆柱底面半径 2cm、高 5cm，体积是多少？（π 取 3）', options: [40, 50, 60, 80], answer: 60, hint: '3 × 2² × 5 = 60。' }
+    ]
+  };
+
   let state = JSON.parse(JSON.stringify(defaultState));
 
   // 当前会话状态（不持久化）
@@ -469,6 +501,10 @@ window.addEventListener('unhandledrejection', function(e) {
     enemyStunned: false,       // 弱点破防/武器震慑：怪物下一次攻击无效
     usedActiveSkills: [],      // 本场战斗已用的主动技能
     bossShield: false,         // Boss 护盾：首题（破盾题）答对前不掉血
+    perfectStreak: 0,          // 连续独立答对（无提示且首次尝试），>=3 触发灵感挑战
+    challengeActive: false,    // 灵感挑战题进行中
+    challengeDone: false,      // 本场战斗已出过灵感挑战
+    challengeQuestion: null,
     // 目标光柱（会话级，不持久化）
     beamUntil: 0,
     beamCooldownUntil: 0,
@@ -849,6 +885,10 @@ window.addEventListener('unhandledrejection', function(e) {
       enemyStunned: false,
       usedActiveSkills: [],
       bossShield: false,
+      perfectStreak: 0,
+      challengeActive: false,
+      challengeDone: false,
+      challengeQuestion: null,
       beamUntil: 0,
       beamCooldownUntil: 0,
       lastProgressAt: 0,
@@ -1100,6 +1140,7 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#btn-shop').addEventListener('click', () => { sfx('click'); openShop('weapons'); });
     $('#btn-map-shop').addEventListener('click', () => { sfx('click'); openShop('weapons'); });
     $('#btn-bigmap')?.addEventListener('click', () => { sfx('click'); openBigmap(); });
+    $('#btn-math-vision')?.addEventListener('click', () => { sfx('click'); useMathVision(); });
     $('#btn-close-bigmap')?.addEventListener('click', closeBigmap);
     $('#bigmap-overlay')?.addEventListener('click', closeBigmap);
     $('#bigmap-canvas')?.addEventListener('click', handleBigmapClick);
@@ -1191,6 +1232,11 @@ window.addEventListener('unhandledrejection', function(e) {
       if (actionKey === 'm' && session.mapActive && !session.controlsLocked) {
         e.preventDefault();
         openBigmap();
+        return;
+      }
+      if (actionKey === 'v' && session.mapActive && !session.controlsLocked) {
+        e.preventDefault();
+        useMathVision();
         return;
       }
       if (actionKey === 'enter' || actionKey === ' ') {
@@ -2576,6 +2622,7 @@ window.addEventListener('unhandledrejection', function(e) {
           session.animTick = 0;
           try { updateProximityAnimations(); } catch (e) { console.warn('updateProximityAnimations error', e); }
           try { updateGuideBeam(); } catch (e) { console.warn('updateGuideBeam error', e); }
+          try { updateMathVisionMarks(); } catch (e) { console.warn('updateMathVisionMarks error', e); }
         }
       }
       try { updateCompass(); } catch (e) { console.warn('updateCompass error', e); }
@@ -2808,6 +2855,53 @@ window.addEventListener('unhandledrejection', function(e) {
     } else {
       beam.classList.add('hidden');
     }
+  }
+
+  // ========== 数学视野：一键高亮附近可交互物（30 秒冷却，只提示附近范围） ==========
+  function useMathVision() {
+    if (!session.mapActive || session.controlsLocked) return;
+    const now = performance.now();
+    if (now < (session.visionCooldownUntil || 0)) {
+      showHint(`数学视野还在恢复（${Math.ceil((session.visionCooldownUntil - now) / 1000)} 秒）`);
+      return;
+    }
+    session.visionUntil = now + 6000;
+    session.visionCooldownUntil = now + 30000;
+    sfx('burst');
+    showHint('👁️ 数学视野：附近的发光物都显形了！');
+    trackEvent('math_vision');
+    updateMathVisionMarks();
+  }
+
+  // 视野范围：只高亮附近，远处仍需自己探索
+  function updateMathVisionMarks() {
+    const now = performance.now();
+    const active = now < (session.visionUntil || 0);
+    const px = session.playerX;
+    const py = session.playerY;
+    const groups = [
+      ['.collectible', 520],
+      ['.chest', 520],
+      ['.material', 560],
+      ['.hidden-area', 520]
+    ];
+    groups.forEach(([sel, radius]) => {
+      $$(sel).forEach(el => {
+        const x = parseInt(el.style.left);
+        const y = parseInt(el.style.top);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        el.classList.toggle('vision-mark', active && Math.hypot(px - x, py - y) < radius);
+      });
+    });
+    // 未修复机关：范围更大，是孩子最该找到的目标
+    Object.values(MECHANISMS).forEach(mech => {
+      if (mech.restored()) return;
+      const el = document.getElementById(mech.elementId);
+      if (!el) return;
+      el.classList.toggle('vision-mark', active && Math.hypot(px - mech.x, py - mech.y) < 900);
+    });
+    // 冷却中的按钮样式
+    $('#btn-math-vision')?.classList.toggle('cooling', now < (session.visionCooldownUntil || 0));
   }
 
   // 检测地标距离：靠近后显示入口，由玩家点击按钮或按 Enter 确认进入。
@@ -4156,6 +4250,10 @@ window.addEventListener('unhandledrejection', function(e) {
     session.enemyStunned = false;
     session.usedActiveSkills = [];
     session.bossShield = level.boss === true;
+    session.perfectStreak = 0;
+    session.challengeActive = false;
+    session.challengeDone = false;
+    session.challengeQuestion = null;
 
     // 使用动态生成的题目（如果有），否则用静态题目
     let questions = null;
@@ -5668,6 +5766,9 @@ window.addEventListener('unhandledrejection', function(e) {
       }
       session.correctStreak++;
       state.player.answerStreak++;
+      // 连续独立答对计数（首次尝试且零提示），用于触发灵感挑战
+      if (firstTry && hintTier === 0) session.perfectStreak = (session.perfectStreak || 0) + 1;
+      else session.perfectStreak = 0;
       const damage = Math.ceil(session.enemyMaxHp / session.currentQuestions.length);
       const remainingQuestions = session.currentQuestions.length - questionIndex - 1;
       // 敌人血量表达学习进度，不允许随机伤害或爆发跳过迁移题。
@@ -5725,6 +5826,7 @@ window.addEventListener('unhandledrejection', function(e) {
         state.player.answerStreak = 0;
       }
       session.wrongAnswers++;
+      session.perfectStreak = 0;
       // 怪物反击：伤害 = 怪物攻击 − 玩家防御，震慑/护盾可抵挡
       if (session.enemyStunned) {
         session.enemyStunned = false;
@@ -5767,7 +5869,12 @@ window.addEventListener('unhandledrejection', function(e) {
       if (state.player.hp <= 0) {
         gameOver();
       } else if (correct && questionIndex === session.currentQuestions.length - 1) {
-        enemyDefeated();
+        // 连续 3 题独立答对：出难一档的灵感挑战题（只上调，答错无惩罚）
+        if (session.perfectStreak >= 3 && !session.challengeDone) {
+          startChallengeQuestion();
+        } else {
+          enemyDefeated();
+        }
       } else if (correct) {
         session.currentQuestionIndex++;
         renderBattleQuestion();
@@ -6050,6 +6157,66 @@ window.addEventListener('unhandledrejection', function(e) {
         levelsGained
       });
     }, 800);
+  }
+
+  // ========== 灵感挑战 ==========
+  function startChallengeQuestion() {
+    const skill = session.currentLevel?.skill || 'anemo';
+    const pool = CHALLENGE_QUESTIONS[skill] || CHALLENGE_QUESTIONS.anemo;
+    session.challengeQuestion = pool[Math.floor(Math.random() * pool.length)];
+    session.challengeActive = true;
+    session.challengeDone = true;
+    sfx('streak');
+    trackEvent('challenge_start', { levelId: session.currentLevel.id, skill, perfectStreak: session.perfectStreak });
+    renderChallengeQuestion();
+  }
+
+  function renderChallengeQuestion() {
+    const q = session.challengeQuestion;
+    if (!q) return;
+    session.answered = false;
+    $('#question-tag').textContent = '✨ 灵感挑战';
+    $('#question-tag').style.background = '#e8c86e';
+    $('#question-text').textContent = q.text;
+    $('#question-visual').innerHTML = '';
+    const area = $('#answer-area');
+    area.classList.remove('has-interaction');
+    area.innerHTML = '';
+    q.options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'answer-btn';
+      btn.textContent = opt;
+      btn.addEventListener('click', () => handleChallengeAnswer(opt, btn));
+      area.appendChild(btn);
+    });
+  }
+
+  // 灵感挑战判定：答对额外奖励，答错零惩罚直接进入结算
+  function handleChallengeAnswer(selected, btn) {
+    if (session.answered) return;
+    session.answered = true;
+    const q = session.challengeQuestion;
+    const correct = selected == q.answer;
+    $$('.answer-btn').forEach(b => b.disabled = true);
+    session.challengeActive = false;
+    if (correct) {
+      sfx('win');
+      btn.classList.add('correct');
+      showStunOverlay('✨ 灵感挑战成功！');
+      grantRewards({ gems: 30, exp: 50 });
+      showHint('✨ 灵感挑战成功！额外 30 钻石 + 50 经验！', 2500);
+      trackEvent('challenge_success', { levelId: session.currentLevel.id, skill: session.currentLevel?.skill });
+    } else {
+      sfx('wrong');
+      btn.classList.add('wrong');
+      showHint('挑战题答错不扣分，已经很棒了！', 2000);
+      trackEvent('challenge_missed', { levelId: session.currentLevel.id });
+    }
+    updateHud();
+    saveGame();
+    setTimeout(() => {
+      if (!session.battleResolved) enemyDefeated();
+    }, 900);
   }
 
   function gameOver() {
