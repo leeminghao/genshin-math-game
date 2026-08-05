@@ -4842,3 +4842,94 @@ html.reduced-motion *::after {
   opacity: 0.45;
   filter: grayscale(0.6);
 }
+
+
+/* ========== 主角 SVG 四向行走帧 ========== */
+.player-head {
+  background-image: none !important;
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hero-svg {
+  width: 60px;
+  height: 60px;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.45));
+  transition: transform 0.12s;
+}
+/* 朝向：下（默认正面）、上（背影）、左、右（镜像） */
+.player-sprite.face-up .hero-face { opacity: 0; }
+.player-sprite.face-up .hero-back { opacity: 1; }
+.player-sprite.face-left .hero-svg { transform: scaleX(0.88); }
+.player-sprite.face-left .eye-l { opacity: 0; }
+.player-sprite.face-right .hero-svg { transform: scaleX(-0.88); }
+.player-sprite.face-right .eye-l { opacity: 0; }
+/* 行走循环：步频摆动 */
+.player-sprite.moving .hero-svg {
+  animation: hero-walk 0.32s ease-in-out infinite;
+}
+@keyframes hero-walk {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-3px) rotate(3deg); }
+}
+.player-sprite.moving.face-right .hero-svg,
+.player-sprite.moving.face-left .hero-svg {
+  animation: hero-walk-side 0.32s ease-in-out infinite;
+}
+@keyframes hero-walk-side {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -3px; }
+}
+
+
+/* ========== 区域粒子氛围 ========== */
+.particle-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 9;
+}
+.particle {
+  position: absolute;
+  font-size: 18px;
+  opacity: 0;
+  pointer-events: none;
+}
+.particle.drift-fall { animation: particle-fall 2.8s linear forwards; }
+.particle.drift-rise { animation: particle-rise 2.6s linear forwards; }
+.particle.drift-float { animation: particle-float 3s linear forwards; }
+.particle.drift-flash { animation: particle-flash 1.2s linear forwards; }
+@keyframes particle-fall {
+  0% { opacity: 0; transform: translate(0, 0) rotate(0deg); }
+  12% { opacity: 0.85; }
+  100% { opacity: 0; transform: translate(24px, 120px) rotate(50deg); }
+}
+@keyframes particle-rise {
+  0% { opacity: 0; transform: translate(0, 0); }
+  12% { opacity: 0.8; }
+  100% { opacity: 0; transform: translate(12px, -110px); }
+}
+@keyframes particle-float {
+  0% { opacity: 0; transform: translate(0, 0); }
+  15% { opacity: 0.75; }
+  100% { opacity: 0; transform: translate(90px, 18px); }
+}
+@keyframes particle-flash {
+  0% { opacity: 0; }
+  20% { opacity: 1; transform: scale(1.4); }
+  100% { opacity: 0; transform: scale(0.8); }
+}
+
+
+/* 机关面板 SVG 实体图标 */
+.mech-entity-emoji svg {
+  width: 76px;
+  height: 76px;
+  display: block;
+  margin: 0 auto;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.4));
+}

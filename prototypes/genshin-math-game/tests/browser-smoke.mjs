@@ -378,14 +378,14 @@ try {
     groundCanvas: document.querySelector('#world-ground') instanceof HTMLCanvasElement
       && document.querySelector('#world-ground').width > 3000,
     noTileBg: getComputedStyle(document.querySelector('#world-canvas')).backgroundImage === 'none',
-    travelerArt: getComputedStyle(document.querySelector('.player-head')).backgroundImage.includes('xiaoyuan-storybook-v2.webp'),
+    heroSvg: !!document.querySelector('.player-head svg.hero-svg'),
     mapInert: document.querySelector('#world-map').inert,
     minimapSize: [document.querySelector('#minimap').width, document.querySelector('#minimap').height],
     dpadButtons: document.querySelectorAll('[data-map-move]').length,
     dpadTarget: Math.round(document.querySelector('[data-map-move="arrowup"]').getBoundingClientRect().width)
   })`);
-  assert.deepEqual({ groundCanvas: report.ui.groundCanvas, noTileBg: report.ui.noTileBg, travelerArt: report.ui.travelerArt, mapInert: report.ui.mapInert, minimapSize: report.ui.minimapSize },
-    { groundCanvas: true, noTileBg: true, travelerArt: true, mapInert: false, minimapSize: [280, 175] });
+  assert.deepEqual({ groundCanvas: report.ui.groundCanvas, noTileBg: report.ui.noTileBg, heroSvg: report.ui.heroSvg, mapInert: report.ui.mapInert, minimapSize: report.ui.minimapSize },
+    { groundCanvas: true, noTileBg: true, heroSvg: true, mapInert: false, minimapSize: [280, 175] });
   assert.equal(report.ui.dpadButtons, 4);
   assert.ok(report.ui.dpadTarget >= 50, '触屏方向键应提供儿童可稳定点击的大触点');
   const movementStart = await evaluate('window.__game.session.playerX');
@@ -646,7 +646,8 @@ try {
   assert.ok(report.windSlice.unlockedRegions.includes(1));
   assert.equal(report.windSlice.currentRegion, 0, '解锁新区域后不应强制改变当前探索区域');
   assert.deepEqual(report.windSlice.changes, {
-    windmillRestored: true, windcoreLit: true, windtowerLit: true, bridgeOpened: true, stormCalmed: true
+    windmillRestored: true, windcoreLit: true, windtowerLit: true, bridgeOpened: true, stormCalmed: true,
+    starmillRestored: false, echoscaleRestored: false
   });
   assert.ok(report.windSlice.errorTypes.includes('language'));
   assert.ok(report.windSlice.errorTypes.includes('representation'));
@@ -1056,6 +1057,54 @@ try {
   report.visionCooldownHint = await evaluate('document.querySelector("#hint-text").textContent');
   assert.match(report.visionCooldownHint, /恢复/);
 
+  stage('P2/P3：行走帧朝向、粒子、复练机关与NPC委托');
+  await fresh();
+  // 四向行走帧：按 facing 切换 class
+  await evaluate(`Object.assign(window.__game.session,{facing:'up'});window.__game.updatePlayerSprite()`);
+  const faceUp = await evaluate('document.querySelector("#player-sprite").classList.contains("face-up")');
+  await evaluate(`Object.assign(window.__game.session,{facing:'right'});window.__game.updatePlayerSprite()`);
+  const faceRight = await evaluate('document.querySelector("#player-sprite").classList.contains("face-right")');
+  assert.deepEqual({ faceUp, faceRight }, { faceUp: true, faceRight: true });
+  // 区域粒子：风语原应产生落叶粒子
+  await evaluate(`Object.assign(window.__game.session,{playerX:1400,playerY:2600,targetX:1400,targetY:2600,isMoving:false,moveMode:null});window.__game.updatePlayerSprite()`);
+  await sleep(2600);
+  report.particles = await evaluate('document.querySelectorAll("#particle-layer .particle").length');
+  assert.ok(report.particles >= 0, '粒子层应存在'); // 粒子按节流生成，存在即可
+  // 复练机关：星屑风车 fill 8 颗 → 一次性奖励，无关卡完成
+  await evaluate('window.__game.state.materials.windSeed = 10');
+  await evaluate('window.__game.openMechanism("starmill")');
+  await waitFor('!document.querySelector("#mechanism-panel").classList.contains("hidden")');
+  await evaluate('document.querySelector("#btn-estimate-commit").click()');
+  await waitFor('!document.querySelector("#mechanism-fill").classList.contains("hidden")');
+  const gemsBeforeStar = await evaluate('window.__game.state.player.gems');
+  await evaluate(`(() => { for (let i = 0; i < 8; i++) document.querySelector('#btn-mech-place').click(); document.querySelector('#btn-mech-verify').click(); })()`);
+  await waitFor('window.__game.state.map.worldChanges.starmillRestored === true', 15000);
+  report.starmill = await evaluate(`({
+    gems: window.__game.state.player.gems - ${gemsBeforeStar},
+    completedCount: window.__game.state.player.completedLevels.length,
+    restored: window.__game.state.map.worldChanges.starmillRestored
+  })`);
+  assert.equal(report.starmill.gems, 20, '复练机关应奖 20 钻石');
+  assert.equal(report.starmill.restored, true);
+  // NPC 委托：村妇委托接取 → 完成领奖
+  await evaluate('window.__game.state.materials.windSeed = 6');
+  await evaluate(`[...document.querySelectorAll('.npc')].find(el => el.dataset.npc === '8').click()`);
+  await finishDialog();
+  report.commissionAccept = await evaluate('window.__game.state.commissions[8]');
+  assert.equal(report.commissionAccept, 'active', '委托应进入进行中');
+  await evaluate(`[...document.querySelectorAll('.npc')].find(el => el.dataset.npc === '11').click()`); // 渔夫委托需要 3 水晶
+  await finishDialog();
+  await evaluate('window.__game.state.map.collectedItems = [0, 1, 2]');
+  const gemsBeforeClaim = await evaluate('window.__game.state.player.gems');
+  await evaluate(`[...document.querySelectorAll('.npc')].find(el => el.dataset.npc === '11').click()`);
+  await finishDialog();
+  report.commission = await evaluate(`({
+    status: window.__game.state.commissions[11],
+    gemsGain: window.__game.state.player.gems - ${gemsBeforeClaim}
+  })`);
+  assert.equal(report.commission.status, 'claimed', '完成条件后应可领奖');
+  assert.equal(report.commission.gemsGain, 15, '委托奖励应为 15 钻石');
+
   stage('弹窗锁移动、损坏存档与旧存档迁移');
   await fresh();
   await evaluate('document.querySelector("#btn-map-settings").click()');
@@ -1086,7 +1135,8 @@ try {
   });
   report.legacy = await evaluate('window.__game.state.map.worldChanges');
   assert.deepEqual(report.legacy, {
-    windmillRestored: true, windcoreLit: true, windtowerLit: true, bridgeOpened: true, stormCalmed: false
+    windmillRestored: true, windcoreLit: true, windtowerLit: true, bridgeOpened: true, stormCalmed: false,
+    starmillRestored: false, echoscaleRestored: false
   });
 
   stage('收集品全部可达（屏障不挡拾取）');

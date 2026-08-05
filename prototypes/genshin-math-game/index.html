@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <title>数境远征：艾瑟里亚数理冒险</title>
-  <link rel="stylesheet" href="css/style.css?v=6.5">
+  <link rel="stylesheet" href="css/style.css?v=6.6">
 </head>
 <body>
   <div id="app">
@@ -55,7 +55,7 @@
         </div>
         <div class="menu-guide-line"><span class="guide-dot"></span>星芽会陪你观察，答错也可以随时重来。</div>
       </div>
-      <div class="version">2D 开放世界 · 数境大陆 v6.5</div>
+      <div class="version">2D 开放世界 · 数境大陆 v6.6</div>
     </section>
 
     <!-- 三题能力诊断 -->
@@ -506,6 +506,36 @@
     <div class="world-change-label">熄灭的风灯塔</div>
     <div class="repair-badge">🔧</div>
   </div>
+  <div class="world-change mech-entity" id="starmill-change" style="left: 8800px; top: 2350px;">
+    <div class="mech-entity-icon">🏠</div>
+    <div class="world-change-label">星屑风车</div>
+    <div class="repair-badge">🔧</div>
+  </div>
+  <div class="world-change mech-entity" id="echoscale-change" style="left: 5000px; top: 5550px;">
+    <div class="mech-entity-icon">⚖️</div>
+    <div class="world-change-label">回声天平</div>
+    <div class="repair-badge">🔧</div>
+  </div>
+  <!-- 复练机关材料 -->
+  <div class="material" data-material="windSeed" style="left: 8720px; top: 2280px;">🍃</div>
+  <div class="material" data-material="windSeed" style="left: 8890px; top: 2290px;">🍃</div>
+  <div class="material" data-material="windSeed" style="left: 8750px; top: 2430px;">🍃</div>
+  <div class="material" data-material="windSeed" style="left: 8920px; top: 2410px;">🍃</div>
+  <div class="material" data-material="windSeed" style="left: 8800px; top: 2220px;">🍃</div>
+  <div class="material" data-material="windSeed" style="left: 8960px; top: 2340px;">🍃</div>
+  <div class="material" data-material="windSeed" style="left: 8660px; top: 2360px;">🍃</div>
+  <div class="material" data-material="windSeed" style="left: 8840px; top: 2480px;">🍃</div>
+  <div class="material" data-material="windSeed" style="left: 8690px; top: 2200px;">🍃</div>
+  <div class="material" data-material="windCrystal" style="left: 4930px; top: 5480px;">🔮</div>
+  <div class="material" data-material="windCrystal" style="left: 5080px; top: 5490px;">🔮</div>
+  <div class="material" data-material="windCrystal" style="left: 4950px; top: 5620px;">🔮</div>
+  <div class="material" data-material="windCrystal" style="left: 5060px; top: 5630px;">🔮</div>
+  <div class="material" data-material="windCrystal" style="left: 5000px; top: 5420px;">🔮</div>
+  <div class="material" data-material="windCrystal" style="left: 5120px; top: 5560px;">🔮</div>
+  <div class="material" data-material="windCrystal" style="left: 4890px; top: 5550px;">🔮</div>
+  <div class="material" data-material="windCrystal" style="left: 5100px; top: 5700px;">🔮</div>
+  <div class="material" data-material="windCrystal" style="left: 4920px; top: 5700px;">🔮</div>
+  <div class="material" data-material="windCrystal" style="left: 5160px; top: 5450px;">🔮</div>
   <!-- 风种材料：收集后用于修复风车 -->
   <div class="material" data-material="windSeed" style="left: 1500px; top: 2300px;">🍃</div>
   <div class="material" data-material="windSeed" style="left: 1560px; top: 2520px;">🍃</div>
@@ -570,7 +600,20 @@
           <!-- 玩家角色 -->
           <div class="player-sprite" id="player-sprite">
             <div class="player-body">
-              <div class="player-head">🧒</div>
+              <div class="player-head">
+                <svg viewBox="0 0 40 40" class="hero-svg" aria-hidden="true">
+                  <circle cx="20" cy="29" r="10" fill="#3b82c4"/>
+                  <path d="M12 24 L28 24 L24 31 L16 31 Z" fill="#e25555"/>
+                  <circle cx="20" cy="14" r="11" fill="#ffd9b3"/>
+                  <path d="M9 14 Q10 4 20 4 Q30 4 31 14 Q25 9 20 9 Q15 9 9 14 Z" fill="#6b4a2f"/>
+                  <g class="hero-face">
+                    <circle class="eye-l" cx="16" cy="14" r="1.7" fill="#333"/>
+                    <circle class="eye-r" cx="24" cy="14" r="1.7" fill="#333"/>
+                    <path d="M17 19 Q20 21.5 23 19" stroke="#c26a4a" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+                  </g>
+                  <path class="hero-back" d="M10 12 Q20 6 30 12 L30 19 Q20 13 10 19 Z" fill="#5a3d28" opacity="0"/>
+                </svg>
+              </div>
               <div class="player-cape"></div>
             </div>
             <div class="player-shadow"></div>
@@ -579,6 +622,8 @@
             <div class="player-marker">▼ 你在这里</div>
           </div>
         </div>
+        <!-- 区域粒子氛围层：飘叶/飘雪/飞尘，按所在区域切换 -->
+        <div class="particle-layer" id="particle-layer"></div>
       </div>
 
       <header class="map-header">
@@ -1044,8 +1089,8 @@
     </section>
   </div>
 
-  <script src="js/data.js?v=6.5"></script>
-  <script src="js/learning.js?v=6.5"></script>
-  <script src="js/game.js?v=6.5"></script>
+  <script src="js/data.js?v=6.6"></script>
+  <script src="js/learning.js?v=6.6"></script>
+  <script src="js/game.js?v=6.6"></script>
 </body>
 </html>

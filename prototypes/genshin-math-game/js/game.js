@@ -165,6 +165,37 @@ window.addEventListener('unhandledrejection', function(e) {
       restoreText: '风暴核心很安静。去别处冒险吧',
       symbols: ['5 = 5', '两边相等就平衡'],
       applyWorldChange: () => { state.map.worldChanges.stormCalmed = true; }
+    },
+    // 复练机关：同样的结构换一组参数，做"单变量迁移"练习（一次性奖励）
+    starmill: {
+      id: 'starmill', levelId: null, type: 'fill',
+      elementId: 'starmill-change',
+      x: 8800, y: 2350, radius: 170,
+      title: '星屑风车', actionLabel: '修复',
+      material: 'windSeed', itemEmoji: '🍃', slotEmoji: '🌀',
+      need: 8,
+      entityEmoji: '🏠', subEmoji: '✣',
+      estimatePrompt: '这座要几颗？',
+      estimateTarget: 8,
+      restored: () => state.map.worldChanges.starmillRestored,
+      restoreText: '星屑风车转着呢！',
+      symbols: ['🍃×8 → 🌀×8', '换一座也会修！'],
+      applyWorldChange: () => { state.map.worldChanges.starmillRestored = true; }
+    },
+    echoscale: {
+      id: 'echoscale', levelId: null, type: 'balance',
+      elementId: 'echoscale-change',
+      x: 5000, y: 5550, radius: 170,
+      title: '回声天平', actionLabel: '配平',
+      material: 'windCrystal', itemEmoji: '🔮', slotEmoji: '◌',
+      leftStart: 9, need: 9,
+      entityEmoji: '⚖️', subEmoji: '🏜️',
+      estimatePrompt: '右盘放几颗？',
+      estimateTarget: 9,
+      restored: () => state.map.worldChanges.echoscaleRestored,
+      restoreText: '回声天平很稳。',
+      symbols: ['9 = 9', '换个数也会配！'],
+      applyWorldChange: () => { state.map.worldChanges.echoscaleRestored = true; }
     }
   };
 
@@ -260,7 +291,9 @@ window.addEventListener('unhandledrejection', function(e) {
         windcoreLit: false,
         windtowerLit: false,
         bridgeOpened: false,
-        stormCalmed: false
+        stormCalmed: false,
+        starmillRestored: false,
+        echoscaleRestored: false
       }
     },
     achievements: {
@@ -304,6 +337,7 @@ window.addEventListener('unhandledrejection', function(e) {
       reducedMotion: false
     },
     learning: Learning.createLearningState(),
+    commissions: {},
     cosmetics: {
       owned: ['default'],
       selected: 'default'
@@ -743,6 +777,8 @@ window.addEventListener('unhandledrejection', function(e) {
       || ['0-0', '0-1', '0-2', '0-3'].every(id => normalized.player.completedLevels.includes(id));
     normalized.map.worldChanges.stormCalmed = rawWorldChanges.stormCalmed === true
       || normalized.player.completedLevels.includes('0-4');
+    normalized.map.worldChanges.starmillRestored = rawWorldChanges.starmillRestored === true;
+    normalized.map.worldChanges.echoscaleRestored = rawWorldChanges.echoscaleRestored === true;
 
     Object.keys(defaultState.achievements).forEach(id => {
       normalized.achievements[id] = rawAchievements[id] === true;
@@ -757,6 +793,12 @@ window.addEventListener('unhandledrejection', function(e) {
     normalized.settings.largeText = rawSettings.largeText === true;
     normalized.settings.reducedMotion = rawSettings.reducedMotion === true;
     normalized.learning = Learning.normalizeLearning(rawState.learning);
+    // NPC 委托状态：只保留合法 NPC 与合法状态
+    const rawCommissions = isPlainObject(rawState.commissions) ? rawState.commissions : {};
+    Object.keys(COMMISSIONS).forEach(npcId => {
+      const status = rawCommissions[npcId];
+      if (['active', 'claimed'].includes(status)) normalized.commissions[npcId] = status;
+    });
     const validCosmetics = new Set(COSMETICS.map(item => item.id));
     normalized.cosmetics.owned = uniqueValues(rawCosmetics.owned, value => validCosmetics.has(value));
     if (!normalized.cosmetics.owned.includes('default')) normalized.cosmetics.owned.unshift('default');
@@ -957,6 +999,7 @@ window.addEventListener('unhandledrejection', function(e) {
     session.hasSave = loadGame();
     if (ensureQuests()) saveGame(); // 跨天/跨周打开游戏时刷新任务
     applyAccessibilityPreferences();
+    applyInputHints();
     bindEvents();
     updateContinueButton();
     runLoading();
@@ -985,6 +1028,24 @@ window.addEventListener('unhandledrejection', function(e) {
         console.error('游戏加载异常：主角元素不存在');
       }
     }, 1000);
+  }
+
+  // 输入设备提示切换：触屏和键鼠显示不同的操作引导
+  function applyInputHints() {
+    const isTouch = window.matchMedia('(hover: none), (pointer: coarse)').matches;
+    const hint = $('.control-hint');
+    if (hint) {
+      hint.innerHTML = isTouch
+        ? '<strong>探索方式</strong><span>摇杆拖动 / 点击地图 / 点「交互」按钮</span>'
+        : '<strong>探索方式</strong><span>WASD / 方向键 / 点击地图 · M 地图 · V 视野</span>';
+    }
+    const tutorialItems = isTouch
+      ? ['👆 摇杆拖动 移动', '🖐️ 点击地图 自动寻路', '🔘 点「交互」 修机关/对话', '✨ 靠近发光区域 触发剧情', '💎 收集水晶材料 换钻石']
+      : ['⌨️ WASD / 方向键 移动', '🖱️ 点击地图 自动寻路', '🗺️ M 打开探险地图 · V 数学视野', '🏛️ 靠近地标 点击“进入”挑战', '💎 收集水晶材料 换钻石'];
+    const body = $('#tutorial-card .tutorial-body');
+    if (body) {
+      body.innerHTML = tutorialItems.map(text => `<div class="tutorial-item">${text}</div>`).join('');
+    }
   }
 
   // 加载动画
@@ -1893,6 +1954,34 @@ window.addEventListener('unhandledrejection', function(e) {
     }
   }
 
+  // NPC 委托：对话接小任务，完成后回来领奖（材料/机关/收集三类）
+  const COMMISSIONS = {
+    8: {
+      speaker: '村妇', emoji: '👩‍🌾',
+      title: '帮忙捡风种', text: '帮我捡 5 颗风种回来吧，修风车要用。',
+      need: { material: 'windSeed', count: 5 }, reward: 15
+    },
+    9: {
+      speaker: '农夫', emoji: '👨‍🌾',
+      title: '机关修理课', text: '听说你在修机关？修好 2 座给我看看！',
+      need: { mechanisms: 2 }, reward: 15
+    },
+    11: {
+      speaker: '湖畔渔夫', emoji: '🧜',
+      title: '亮晶晶的东西', text: '帮我捡 3 颗水晶吧，小孩子最喜欢亮晶晶的。',
+      need: { collectibles: 3 }, reward: 15
+    }
+  };
+
+  function checkCommissionDone(npcId) {
+    const c = COMMISSIONS[npcId];
+    if (!c) return false;
+    if (c.need.material) return (state.materials[c.need.material] || 0) >= c.need.count;
+    if (c.need.mechanisms) return Object.values(MECHANISMS).filter(m => m.restored()).length >= c.need.mechanisms;
+    if (c.need.collectibles) return state.map.collectedItems.length >= c.need.collectibles;
+    return false;
+  }
+
   // 技能树：被动技能
   function hasPassive(id) {
     return Array.isArray(state.passives) && state.passives.includes(id);
@@ -2616,6 +2705,7 @@ window.addEventListener('unhandledrejection', function(e) {
         try { checkMaterials(); } catch (e) { console.warn('checkMaterials error', e); }
         try { checkMechanismProximity(); } catch (e) { console.warn('checkMechanismProximity error', e); }
         try { updateMobileActionButton(); } catch (e) { console.warn('updateMobileActionButton error', e); }
+        try { updateParticles(dt); } catch (e) { console.warn('updateParticles error', e); }
         // 动画静默化：只有玩家靠近的实体才播放动画（节流 200ms）
         session.animTick = (session.animTick || 0) + dt;
         if (session.animTick > 0.2) {
@@ -2760,6 +2850,11 @@ window.addEventListener('unhandledrejection', function(e) {
     el.style.top = session.playerY + 'px';
     el.classList.toggle('moving', session.isMoving);
 
+    // 四向行走帧：按 facing 切换 SVG 朝向
+    el.classList.remove('face-up', 'face-down', 'face-left', 'face-right');
+    const faceClass = { up: 'face-up', down: 'face-down', left: 'face-left', right: 'face-right' }[session.facing] || 'face-down';
+    el.classList.add(faceClass);
+
     // 方向指示
     const dirEl = $('#player-direction');
     if (dirEl) {
@@ -2902,6 +2997,49 @@ window.addEventListener('unhandledrejection', function(e) {
     });
     // 冷却中的按钮样式
     $('#btn-math-vision')?.classList.toggle('cooling', now < (session.visionCooldownUntil || 0));
+  }
+
+  // ========== 区域粒子氛围：飘叶/飘雪/飞尘，按所在区域切换 ==========
+  const REGION_PARTICLES = [
+    { emojis: ['🍃', '🌾'], drift: 'fall', interval: 700 },    // 风语原：落叶
+    { emojis: ['🪨', '✨'], drift: 'fall', interval: 900 },    // 岩岚港：岩尘
+    { emojis: ['⚡'], drift: 'flash', interval: 1600 },        // 雷鸣群岛：电光
+    { emojis: ['🌿', '🍄'], drift: 'float', interval: 800 },   // 森语城：孢子
+    { emojis: ['💧', '⚪'], drift: 'rise', interval: 800 },    // 澄水庭：水泡
+    { emojis: ['🔥', '✨'], drift: 'rise', interval: 650 },    // 赤焰谷：火星
+    { emojis: ['❄️'], drift: 'fall', interval: 550 }           // 雪境宫：飘雪
+  ];
+
+  function nearestRegionId() {
+    let best = state.player.currentRegion || 0;
+    let bestDist = Infinity;
+    (LAYOUT?.regions || []).forEach(r => {
+      const d = Math.hypot(session.playerX - r.x, session.playerY - r.y);
+      if (d < bestDist) { bestDist = d; best = r.id; }
+    });
+    return bestDist < 1600 ? best : null;
+  }
+
+  function updateParticles(dt) {
+    const layer = $('#particle-layer');
+    if (!layer) return;
+    session.particleTick = (session.particleTick || 0) + dt;
+    const regionId = nearestRegionId();
+    if (regionId === null) return;
+    if (session.particleTick < REGION_PARTICLES[regionId].interval / 1000) return;
+    session.particleTick = 0;
+    if (layer.childElementCount >= 10) return;
+    const cfg = REGION_PARTICLES[regionId];
+    const world = $('#open-world');
+    const vw = world?.clientWidth || 800;
+    const vh = world?.clientHeight || 600;
+    const el = document.createElement('div');
+    el.className = `particle drift-${cfg.drift}`;
+    el.textContent = cfg.emojis[Math.floor(Math.random() * cfg.emojis.length)];
+    el.style.left = (vw / 2 + (Math.random() - 0.5) * vw * 0.9) + 'px';
+    el.style.top = (vh / 2 + (Math.random() - 0.5) * vh * 0.8) + 'px';
+    layer.appendChild(el);
+    setTimeout(() => el.remove(), 3200);
   }
 
   // 检测地标距离：靠近后显示入口，由玩家点击按钮或按 Enter 确认进入。
@@ -3139,11 +3277,30 @@ window.addEventListener('unhandledrejection', function(e) {
     fb.textContent = text;
   }
 
+  // 机关面板实体图标：SVG 化（平台无关渲染，修好后变金色）
+  function mechEntitySvg(mech) {
+    const lit = mech.restored();
+    const glow = lit ? '#ffd964' : '#9fb4c8';
+    if (mech.type === 'fillTo') {
+      return `<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="14" fill="${lit ? '#ffd964' : '#3b5a74'}" stroke="${glow}" stroke-width="2"/><circle cx="24" cy="24" r="20" fill="none" stroke="${glow}" stroke-width="1" opacity="0.55"/></svg>`;
+    }
+    if (mech.type === 'fill') {
+      return `<svg viewBox="0 0 48 48"><path d="M20 46 L24 18 L28 46 Z" fill="#8a6f4d"/><path d="M24 18 L24 4 M24 18 L40 13 M24 18 L8 13 M24 18 L24 32" stroke="${glow}" stroke-width="4.5" stroke-linecap="round"/><circle cx="24" cy="18" r="4" fill="#e8d49a"/></svg>`;
+    }
+    if (mech.type === 'grid') {
+      return `<svg viewBox="0 0 48 48"><rect x="18" y="20" width="12" height="26" fill="#8a6f4d"/><circle cx="24" cy="14" r="8" fill="${lit ? '#ffd964' : '#3b5a74'}" stroke="${glow}" stroke-width="2"/></svg>`;
+    }
+    if (mech.type === 'distribute') {
+      return `<svg viewBox="0 0 48 48"><path d="M6 34 Q24 20 42 34" stroke="${glow}" stroke-width="5" fill="none" stroke-linecap="round"/><line x1="10" y1="39" x2="38" y2="39" stroke="${glow}" stroke-width="3" stroke-linecap="round"/></svg>`;
+    }
+    return `<svg viewBox="0 0 48 48"><line x1="24" y1="6" x2="24" y2="40" stroke="${glow}" stroke-width="3"/><line x1="8" y1="14" x2="40" y2="14" stroke="${glow}" stroke-width="3"/><path d="M4 14 L12 14 L8 25 Z" fill="#8a6f4d"/><path d="M36 14 L44 14 L40 25 Z" fill="#8a6f4d"/><rect x="15" y="40" width="18" height="4" rx="2" fill="#8a6f4d"/></svg>`;
+  }
+
   function renderMechanism() {
     const mech = MECHANISMS[session.mechanism?.id];
     if (!mech) return;
     const m = session.mechanism;
-    $('#mech-entity-emoji').textContent = mech.entityEmoji;
+    $('#mech-entity-emoji').innerHTML = mechEntitySvg(mech);
     const sub = $('#mech-entity-sub');
     sub.textContent = mech.subEmoji;
     sub.classList.toggle('spinning', mech.restored());
@@ -3485,6 +3642,17 @@ window.addEventListener('unhandledrejection', function(e) {
 
   // 机关完成 → 复用关卡完成链路（星级、奖励、世界变化、成就、任务）
   function finishMechanism(mech, m) {
+    // 复练机关（levelId 为空）：一次性奖励，无关卡完成链路
+    if (!mech.levelId) {
+      mech.applyWorldChange();
+      grantRewards({ gems: 20, exp: 30 });
+      sfx('win');
+      showHint(`${mech.title}修好了！+20 💎 +30 经验`, 3000);
+      checkAchievements();
+      saveGame();
+      trackEvent('practice_mechanism_complete', { id: mech.id, estimate: m.estimate, estimateError: m.estimate === null ? 99 : Math.abs(m.estimate - (mech.estimateTarget ?? 0)), failCount: m.failCount });
+      return;
+    }
     const regionId = LEVELS.findIndex(list => list.some(item => item.id === mech.levelId));
     const level = regionId >= 0 ? LEVELS[regionId].find(item => item.id === mech.levelId) : null;
     if (!level) return;
@@ -5196,6 +5364,41 @@ window.addEventListener('unhandledrejection', function(e) {
   }
 
   function startNpcDialog(npcId) {
+    // NPC 委托：优先处理（接取 → 进行中 → 领奖）
+    const commission = COMMISSIONS[npcId];
+    if (commission) {
+      const status = state.commissions[npcId] || 'none';
+      if (status !== 'claimed') {
+        rememberMapPosition();
+        session.mapActive = false;
+        if (status === 'none') {
+          state.commissions[npcId] = 'active';
+          saveGame();
+          trackEvent('commission_accept', { npc: npcId });
+          startDialog([
+            { speaker: commission.speaker, emoji: commission.emoji, text: commission.text },
+            { speaker: commission.speaker, emoji: commission.emoji, text: `这是「${commission.title}」委托，完成后回来找我领 ${commission.reward} 💎！` }
+          ], () => { showScreen('world-map'); renderMap(); });
+          return;
+        }
+        if (checkCommissionDone(npcId)) {
+          state.commissions[npcId] = 'claimed';
+          grantRewards({ gems: commission.reward });
+          sfx('quest');
+          saveGame();
+          checkAchievements();
+          trackEvent('commission_claim', { npc: npcId, reward: commission.reward });
+          startDialog([
+            { speaker: commission.speaker, emoji: commission.emoji, text: `委托完成！太感谢了，这是谢礼 ${commission.reward} 💎。` }
+          ], () => { showScreen('world-map'); renderMap(); });
+          return;
+        }
+        startDialog([
+          { speaker: commission.speaker, emoji: commission.emoji, text: `委托还在进行哦：${commission.text}` }
+        ], () => { showScreen('world-map'); renderMap(); });
+        return;
+      }
+    }
     const dialogs = npcId === 1 && state.map.worldChanges.windmillRestored
       ? [
           { speaker: '风精灵', emoji: '🌪️', text: '听，风车重新转起来了。你刚才不是只算出了 6，而是让 6 颗风种和 6 个风槽真正一一对应。' },
