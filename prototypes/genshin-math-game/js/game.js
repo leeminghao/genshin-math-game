@@ -2371,7 +2371,7 @@ window.addEventListener('unhandledrejection', function(e) {
     const bakeTexture = () => {
       if (!texture.complete || !texture.naturalWidth) return;
       ctx.save();
-      ctx.globalAlpha = 0.32;
+      ctx.globalAlpha = 0.15;
       ctx.filter = 'saturate(0.5) brightness(1.05)';
       ctx.drawImage(texture, 0, 0, ground.width, ground.height);
       ctx.restore();
@@ -2380,7 +2380,7 @@ window.addEventListener('unhandledrejection', function(e) {
     texture.src = VISUAL_ASSETS.world;
     // 地形与颗粒（纹理未缓存时先出素底，纹理就绪后覆盖重绘）
     const bakeTerrain = () => {
-      const KIND_ALPHA = { ground: 0.5, sea: 0.8, island: 0.65, lake: 0.75, land: 0.8, mountain: 0.7, snow: 0.65, canyon: 0.65 };
+      const KIND_ALPHA = { ground: 0.3, sea: 0.5, island: 0.42, lake: 0.48, land: 0.5, mountain: 0.45, snow: 0.42, canyon: 0.42 };
       LAYOUT.blobs.forEach(b => {
         const x = b.x * SCALE, y = b.y * SCALE, rx = b.rx * SCALE, ry = b.ry * SCALE;
         ctx.save();
@@ -2398,7 +2398,7 @@ window.addEventListener('unhandledrejection', function(e) {
       });
       // 大尺度色彩起伏：打破均匀感
       const washes = ['#7fb069', '#a5c23b', '#8fbf9f', '#c9d89a'];
-      for (let i = 0; i < 26; i++) {
+      for (let i = 0; i < 16; i++) {
         const x = bakeRand() * ground.width, y = bakeRand() * ground.height;
         const r = 150 + bakeRand() * 420;
         const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
@@ -2410,7 +2410,7 @@ window.addEventListener('unhandledrejection', function(e) {
         ctx.fill();
       }
       // 颗粒噪点：增加地表细节
-      for (let i = 0; i < 9000; i++) {
+      for (let i = 0; i < 4500; i++) {
         const x = bakeRand() * ground.width, y = bakeRand() * ground.height;
         ctx.fillStyle = bakeRand() < 0.5
           ? `rgba(42,75,58,${0.02 + bakeRand() * 0.05})`
@@ -2439,8 +2439,8 @@ window.addEventListener('unhandledrejection', function(e) {
       path.setAttribute('d', road.map((p, i) => `${i ? 'L' : 'M'} ${p[0]} ${p[1]}`).join(' '));
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', '#c8b08a');
-      path.setAttribute('stroke-width', '26');
-      path.setAttribute('opacity', '0.4');
+      path.setAttribute('stroke-width', '16');
+      path.setAttribute('opacity', '0.3');
       path.setAttribute('stroke-linecap', 'round');
       path.setAttribute('stroke-linejoin', 'round');
       roadSvg.appendChild(path);
@@ -2550,6 +2550,12 @@ window.addEventListener('unhandledrejection', function(e) {
         try { checkMaterials(); } catch (e) { console.warn('checkMaterials error', e); }
         try { checkMechanismProximity(); } catch (e) { console.warn('checkMechanismProximity error', e); }
         try { updateMobileActionButton(); } catch (e) { console.warn('updateMobileActionButton error', e); }
+        // 动画静默化：只有玩家靠近的实体才播放动画（节流 200ms）
+        session.animTick = (session.animTick || 0) + dt;
+        if (session.animTick > 0.2) {
+          session.animTick = 0;
+          try { updateProximityAnimations(); } catch (e) { console.warn('updateProximityAnimations error', e); }
+        }
       }
       try { updateCompass(); } catch (e) { console.warn('updateCompass error', e); }
       try { drawMinimap(); } catch (e) { console.warn('drawMinimap error', e); }
@@ -2724,6 +2730,28 @@ window.addEventListener('unhandledrejection', function(e) {
     session.cameraY += (camY - session.cameraY) * 0.2;
 
     $('#world-canvas').style.transform = `translate(${-session.cameraX}px, ${-session.cameraY}px)`;
+  }
+
+  // 动画静默化：只有玩家靠近的实体才播动画，远处一律静止（参考原神：静态世界，动态焦点）
+  function updateProximityAnimations() {
+    const px = session.playerX;
+    const py = session.playerY;
+    const groups = [
+      ['.collectible', 300],
+      ['.chest', 300],
+      ['.material', 300],
+      ['.npc', 170],
+      ['.waypoint', 230],
+      ['.hidden-area', 260]
+    ];
+    groups.forEach(([sel, radius]) => {
+      $$(sel).forEach(el => {
+        const x = parseInt(el.style.left);
+        const y = parseInt(el.style.top);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        el.classList.toggle('near', Math.hypot(px - x, py - y) < radius);
+      });
+    });
   }
 
   // 检测地标距离：靠近后显示入口，由玩家点击按钮或按 Enter 确认进入。
