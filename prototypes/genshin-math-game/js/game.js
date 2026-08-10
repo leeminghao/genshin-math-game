@@ -2938,18 +2938,53 @@ window.addEventListener('unhandledrejection', function(e) {
     if (!beam) return;
     const now = performance.now();
     const target = currentObjectiveTarget();
+    // 目标距离标记：常显（不依赖光柱是否点亮）
+    updateObjectiveMarker(target);
     // 卡住检测：60 秒无任何关卡/机关进展，且冷却结束
     if (target && session.lastProgressAt && now - session.lastProgressAt > 60000 && now > session.beamCooldownUntil) {
       session.beamUntil = now + 8000;
       session.beamCooldownUntil = now + 90000;
     }
-    if (target && session.beamUntil && now < session.beamUntil) {
+    const beamActive = target && session.beamUntil && now < session.beamUntil;
+    if (beamActive) {
       beam.style.left = target.x + 'px';
       beam.style.top = target.y + 'px';
       beam.classList.remove('hidden');
     } else {
       beam.classList.add('hidden');
     }
+    // 地面引导虚线：与光柱同时出现（卡住 60 秒或新目标时），平时收起
+    updateGuidePath(beamActive ? target : null);
+  }
+
+  // 目标头顶距离标记：孩子随时知道"还有多远"
+  function updateObjectiveMarker(target) {
+    const el = $('#objective-distance');
+    if (!el) return;
+    if (!target) {
+      el.classList.add('hidden');
+      return;
+    }
+    const dist = Math.round(Math.hypot(session.playerX - target.x, session.playerY - target.y) / 10);
+    el.textContent = `🎯 ${dist}m`;
+    el.style.left = target.x + 'px';
+    el.style.top = (target.y - 56) + 'px';
+    el.classList.remove('hidden');
+  }
+
+  // 地面引导虚线：玩家 → 目标，蚂蚁线流向目标方向
+  function updateGuidePath(target) {
+    const svg = $('#guide-path');
+    const line = $('#guide-path-line');
+    if (!svg || !line) return;
+    if (!target) {
+      svg.classList.add('hidden');
+      return;
+    }
+    const midX = (session.playerX + target.x) / 2;
+    const midY = (session.playerY + target.y) / 2 - 40;
+    line.setAttribute('d', `M ${session.playerX} ${session.playerY} Q ${midX} ${midY} ${target.x} ${target.y}`);
+    svg.classList.remove('hidden');
   }
 
   // ========== 数学视野：一键高亮附近可交互物（30 秒冷却，只提示附近范围） ==========
@@ -3183,6 +3218,48 @@ window.addEventListener('unhandledrejection', function(e) {
     }
   }
 
+  // ========== 收集飞入动画：拾取物沿抛物线飞进 HUD，数字弹跳（原神式拾取反馈） ==========
+  function flyLootToHud(worldX, worldY, emoji, targetSel) {
+    const world = $('#open-world');
+    const target = $(targetSel);
+    if (!world || !target) return;
+    const startX = worldX - session.cameraX;
+    const startY = worldY - session.cameraY;
+    const rect = target.getBoundingClientRect();
+    const worldRect = world.getBoundingClientRect();
+    const endX = rect.left + rect.width / 2 - worldRect.left;
+    const endY = rect.top + rect.height / 2 - worldRect.top;
+    const el = document.createElement('div');
+    el.className = 'fly-loot';
+    el.textContent = emoji;
+    el.style.left = startX + 'px';
+    el.style.top = startY + 'px';
+    world.appendChild(el);
+    const duration = 600;
+    const t0 = performance.now();
+    const peakY = Math.min(startY, endY) - 80;
+    function step(now) {
+      const t = Math.min(1, (now - t0) / duration);
+      const inv = 1 - t;
+      const midX = (startX + endX) / 2;
+      const x = inv * inv * startX + 2 * inv * t * midX + t * t * endX;
+      const y = inv * inv * startY + 2 * inv * t * peakY + t * t * endY;
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      el.style.transform = `scale(${1 - t * 0.5})`;
+      if (t < 1) {
+        requestAnimationFrame(step);
+      } else {
+        el.remove();
+        target.classList.remove('hud-bounce');
+        void target.offsetWidth;
+        target.classList.add('hud-bounce');
+        setTimeout(() => target.classList.remove('hud-bounce'), 420);
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
   // ========== 材料收集 ==========
   function checkMaterials() {
     $$('.material').forEach((item, idx) => {
@@ -3195,6 +3272,8 @@ window.addEventListener('unhandledrejection', function(e) {
       state.materials[kind] = (state.materials[kind] || 0) + 1;
       item.classList.add('collected');
       sfx('collect');
+      const matEmoji = { windSeed: '🍃', windLamp: '🏮', plank: '🪵', windCrystal: '🔮' }[kind] || '🍃';
+      flyLootToHud(mx, my, matEmoji, `#mini-mat-${kind}`);
       saveGame();
       updateMapHud();
       trackEvent('material_collect', { kind, total: state.materials[kind] });
@@ -3993,6 +4072,7 @@ window.addEventListener('unhandledrejection', function(e) {
         item.classList.add('collected');
         const gems = parseInt(item.dataset.gem) || 5;
         grantRewards({ gems });
+        flyLootToHud(cx, cy, '💎', '.mini-gems');
         state.map.collectedItems = [...session.collectedItems];
         saveGame();
         sfx('correct');
@@ -5952,6 +6032,7 @@ window.addEventListener('unhandledrejection', function(e) {
         session.correctStreak++;
         state.player.answerStreak++;
         sfx('burst');
+        hitStop(); // 破盾帧停顿
         showStunOverlay('🛡️💥 护盾破碎！');
         $('#enemy-shield')?.classList.add('hidden');
         $('#enemy-sprite').classList.add('shake');
@@ -5993,11 +6074,13 @@ window.addEventListener('unhandledrejection', function(e) {
         shownDamage *= 2;
         showStunOverlay('⚡ 破防！怪物被震慑');
         $('#enemy-sprite').classList.add('stunned');
+        hitStop(); // 重击帧停顿
       }
 
       if (session.correctStreak >= 3) {
         sfx('streak');
         triggerElementalReaction('resonance');
+        showComboPop(session.correctStreak);
       }
       // 每日/每周任务：答对与连击进度
       const answerQuestNote = questCompletionNote([
@@ -6013,7 +6096,7 @@ window.addEventListener('unhandledrejection', function(e) {
         session.buffDoubleEnergy--;
       }
       state.player.energy = Math.min(state.player.maxEnergy, state.player.energy + energyGain);
-      showDamage(shownDamage);
+      showDamage(shownDamage, isWeakness);
       setTimeout(() => {
         $('#enemy-sprite').classList.add('shake');
         setTimeout(() => $('#enemy-sprite').classList.remove('shake'), 400);
@@ -6109,12 +6192,32 @@ window.addEventListener('unhandledrejection', function(e) {
     resolveBattleAnswer(correct, questionIndex);
   }
 
-  function showDamage(amount) {
+  function showDamage(amount, gold = false) {
     const el = $('#damage-number');
     el.textContent = '-' + amount;
-    el.classList.remove('show');
+    el.classList.remove('show', 'gold');
     void el.offsetWidth; // 触发重排
+    if (gold) el.classList.add('gold');
     el.classList.add('show');
+  }
+
+  // 战斗汁水：帧停顿（画面冻结 90ms + 白闪），用于破盾/弱点等重击时刻
+  function hitStop() {
+    const screen = $('#battle-screen');
+    if (!screen) return;
+    screen.classList.add('hit-stop');
+    setTimeout(() => screen.classList.remove('hit-stop'), 90);
+  }
+
+  // 连击大字：3 连击起每次答对跳出「N 连击！」
+  function showComboPop(streak) {
+    const stage = $('.enemy-stage');
+    if (!stage || streak < 3) return;
+    const el = document.createElement('div');
+    el.className = 'combo-pop';
+    el.textContent = `${streak} 连击！`;
+    stage.appendChild(el);
+    setTimeout(() => el.remove(), 900);
   }
 
   // 破防/震慑提示：浮现在怪物头顶
@@ -6136,7 +6239,7 @@ window.addEventListener('unhandledrejection', function(e) {
     const weapon = getEquippedWeapon();
     const strikeDamage = getPlayerAttack() + weapon.attackBonus;
     sfx('burst');
-    showDamage(strikeDamage);
+    showDamage(strikeDamage, true);
     showStunOverlay(`${weapon.emoji} ${weapon.name}！怪物被震慑`);
     $('#enemy-sprite').classList.add('stunned');
     setTimeout(() => {

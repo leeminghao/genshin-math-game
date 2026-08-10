@@ -1105,6 +1105,53 @@ try {
   assert.equal(report.commission.status, 'claimed', '完成条件后应可领奖');
   assert.equal(report.commission.gemsGain, 15, '委托奖励应为 15 钻石');
 
+  stage('交互汁水：飞入动画、距离标记、连击与帧停顿');
+  await fresh();
+  // 收集飞入动画：靠近材料产生 fly-loot 元素
+  await evaluate(`Object.assign(window.__game.session,{
+    playerX:1500,playerY:2300,targetX:1500,targetY:2300,isMoving:false,moveMode:null
+  });window.__game.updatePlayerSprite()`);
+  await sleep(400);
+  report.flyLoot = await evaluate('document.querySelectorAll(".fly-loot").length');
+  assert.ok(report.flyLoot >= 1, '收集材料应产生飞入动画');
+  // 目标距离标记：常显当前目标与距离
+  await sleep(800);
+  report.objective = await evaluate(`({
+    visible: !document.querySelector('#objective-distance').classList.contains('hidden'),
+    text: document.querySelector('#objective-distance').textContent
+  })`);
+  assert.equal(report.objective.visible, true, '距离标记应常显');
+  assert.match(report.objective.text, /🎯 \d+m/);
+  // 战斗汁水：弱点金色数字 + 帧停顿 + 连击大字
+  await evaluate('window.__game.session.mapActive=false;window.__game.startLevel(2,0)');
+  await finishDialog();
+  await waitFor('document.querySelector(".screen.active")?.id === "battle-screen"');
+  await evaluate(`(() => {
+    const q = window.__game.session.currentQuestions[0];
+    [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) === String(q.answer)).click();
+  })()`);
+  await waitFor('window.__game.session.currentQuestionIndex === 1 && window.__game.session.answered === false');
+  // 弱点题（index 1）答对：金色数字 + 破防帧停顿
+  await evaluate(`(() => {
+    const q = window.__game.session.currentQuestions[1];
+    [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) === String(q.answer)).click();
+  })()`);
+  await sleep(200);
+  report.juice = await evaluate(`({
+    gold: document.querySelector('#damage-number').classList.contains('gold'),
+    stunned: window.__game.session.enemyStunned
+  })`);
+  assert.deepEqual(report.juice, { gold: true, stunned: true }, '弱点应为金色数字并破防');
+  // 第三题答对：3 连击大字
+  await waitFor('window.__game.session.currentQuestionIndex === 2 && window.__game.session.answered === false');
+  await evaluate(`(() => {
+    const q = window.__game.session.currentQuestions[2];
+    [...document.querySelectorAll('.answer-btn')].find(b => String(b.textContent) === String(q.answer)).click();
+  })()`);
+  await sleep(200);
+  report.combo = await evaluate('document.querySelectorAll(".combo-pop").length');
+  assert.ok(report.combo >= 1, '3 连击应跳出连击大字');
+
   stage('弹窗锁移动、损坏存档与旧存档迁移');
   await fresh();
   await evaluate('document.querySelector("#btn-map-settings").click()');

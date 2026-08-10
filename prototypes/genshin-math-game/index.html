@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <title>数境远征：艾瑟里亚数理冒险</title>
-  <link rel="stylesheet" href="css/style.css?v=6.6">
+  <link rel="stylesheet" href="css/style.css?v=6.7">
 </head>
 <body>
   <div id="app">
@@ -55,7 +55,7 @@
         </div>
         <div class="menu-guide-line"><span class="guide-dot"></span>星芽会陪你观察，答错也可以随时重来。</div>
       </div>
-      <div class="version">2D 开放世界 · 数境大陆 v6.6</div>
+      <div class="version">2D 开放世界 · 数境大陆 v6.7</div>
     </section>
 
     <!-- 三题能力诊断 -->
@@ -596,6 +596,12 @@
 
           <!-- 目标光柱：新目标解锁或卡住时指引方向 -->
           <div class="guide-beam hidden" id="guide-beam"></div>
+          <!-- 目标距离标记：常显当前目标的方向与距离 -->
+          <div class="objective-distance hidden" id="objective-distance">🎯 0m</div>
+          <!-- 卡住时的地面引导虚线 -->
+          <svg id="guide-path" class="hidden" aria-hidden="true">
+            <path id="guide-path-line" fill="none" stroke="rgba(255,223,120,0.85)" stroke-width="6" stroke-linecap="round" stroke-dasharray="18 22"/>
+          </svg>
 
           <!-- 玩家角色 -->
           <div class="player-sprite" id="player-sprite">
@@ -1089,8 +1095,8 @@
     </section>
   </div>
 
-  <script src="js/data.js?v=6.6"></script>
-  <script src="js/learning.js?v=6.6"></script>
-  <script src="js/game.js?v=6.6"></script>
+  <script src="js/data.js?v=6.7"></script>
+  <script src="js/learning.js?v=6.7"></script>
+  <script src="js/game.js?v=6.7"></script>
 </body>
 </html>

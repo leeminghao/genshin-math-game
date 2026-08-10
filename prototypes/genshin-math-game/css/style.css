@@ -4933,3 +4933,101 @@ html.reduced-motion *::after {
   margin: 0 auto;
   filter: drop-shadow(0 4px 10px rgba(0,0,0,0.4));
 }
+
+
+/* ========== 收集飞入动画 ========== */
+.fly-loot {
+  position: absolute;
+  z-index: 60;
+  font-size: 24px;
+  pointer-events: none;
+  filter: drop-shadow(0 0 8px rgba(255,215,0,0.9));
+  transform-origin: center;
+}
+.hud-bounce {
+  animation: hud-bounce 0.4s ease;
+}
+@keyframes hud-bounce {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.45); }
+  100% { transform: scale(1); }
+}
+.player-mini span {
+  display: inline-block;
+  transform-origin: center;
+}
+
+
+/* ========== 目标距离标记与引导虚线 ========== */
+.objective-distance {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(11,15,23,0.78);
+  border: 1px solid rgba(255,223,120,0.7);
+  color: #ffe08a;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  z-index: 7;
+  pointer-events: none;
+}
+.objective-distance.hidden { display: none; }
+#guide-path {
+  position: absolute;
+  top: 0; left: 0;
+  width: 10000px;
+  height: 6000px;
+  pointer-events: none;
+  z-index: 2;
+}
+#guide-path.hidden { display: none; }
+#guide-path-line {
+  animation: guide-march 1s linear infinite;
+}
+@keyframes guide-march {
+  100% { stroke-dashoffset: -40; }
+}
+
+
+/* ========== 战斗汁水 ========== */
+/* 帧停顿：全部动画冻结 90ms + 白闪 */
+#battle-screen.hit-stop * {
+  animation-play-state: paused !important;
+}
+#battle-screen.hit-stop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.14);
+  pointer-events: none;
+  z-index: 40;
+}
+/* 金色伤害数字：弱点/武器技能的重击 */
+.damage-number.gold {
+  color: #ffd964;
+  font-size: 46px;
+  text-shadow: 0 0 16px rgba(255,217,100,0.9), 0 0 30px rgba(255,160,40,0.6);
+}
+/* 连击大字 */
+.combo-pop {
+  position: absolute;
+  top: -72px; left: 50%;
+  transform: translateX(-50%);
+  font-size: 26px;
+  font-weight: 900;
+  color: #ffd964;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.8), 0 0 18px rgba(255,217,100,0.7);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: combo-pop 0.9s ease-out forwards;
+  z-index: 30;
+}
+@keyframes combo-pop {
+  0% { opacity: 0; transform: translateX(-50%) translateY(14px) scale(0.6); }
+  25% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.2); }
+  45% { transform: translateX(-50%) translateY(0) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-18px); }
+}
