@@ -5041,3 +5041,22 @@ html.reduced-motion *::after {
 #open-world.sprint-zoom {
   transform: scale(1.03);
 }
+
+
+/* 对话跳过按钮 */
+.dialog-skip {
+  position: absolute;
+  top: 10px; right: 12px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(232,212,154,0.4);
+  background: rgba(11,15,23,0.6);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 5;
+  touch-action: manipulation;
+}
+.dialog-skip:hover { color: var(--gold-light); border-color: var(--gold); }
+.prediction-skip { display: block; margin: 12px auto 0; font-size: 14px; }

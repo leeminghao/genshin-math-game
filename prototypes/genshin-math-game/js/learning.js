@@ -30,25 +30,25 @@
       id: 'wind-one-to-one',
       type: 'match',
       title: '唤醒风车 · 一一配对',
-      story: '沉睡的风车有 6 个风槽。先猜会不会正好放满，再亲手让每颗风种找到唯一的位置。',
+      story: '风车有 6 个风槽。让每颗风种住进一个槽。',
       prediction: {
         text: '6 颗风种放进 6 个风槽，最后会怎样？',
         options: ['正好放满', '会多出风种', '会空出风槽'],
         answer: '正好放满'
       },
       primary: {
-        type: 'match', prompt: '拖动或点击风种，把它们逐个送入空风槽。点击已填风槽可以取回。',
+        type: 'match', prompt: '点风种送进风槽，点风槽可取回。',
         itemEmoji: '🍃', slotEmoji: '🌀', itemLabel: '风种', slotLabel: '风槽', count: 6, slots: 6
       },
       expression: {
-        prompt: '哪句话最准确地描述刚才的操作？',
+        prompt: '哪句话最像你刚才的操作？',
         options: ['6 颗风种和 6 个风槽一一对应', '6 颗风种只需要 5 个风槽', '每个风槽要放 2 颗风种'],
         answer: '6 颗风种和 6 个风槽一一对应'
       },
       formal: '6 颗风种 ↔ 6 个风槽。两边各有 6 个，每颗只配一个位置，所以没有重复、没有遗漏，也没有剩余。',
       transfer: {
-        type: 'match', story: '迁移任务：夜风吹散了 4 只风鸟。让它们分别回到 4 个鸟巢。',
-        prompt: '画面换了，但关系相同：一只风鸟只能回一个鸟巢。',
+        type: 'match', story: '新情境：让 4 只风鸟各自回巢。',
+        prompt: '画面换了，关系没变：一鸟一巢。',
         itemEmoji: '🐦', slotEmoji: '🪺', itemLabel: '风鸟', slotLabel: '鸟巢', count: 4, slots: 4
       },
       hints: {
@@ -62,24 +62,24 @@
       id: 'wind-part-whole',
       type: 'partWhole',
       title: '汇合风流 · 部分与整体',
-      story: '两股风流要汇成一个稳定风核。先预测整体，再把新增的一部分亲手合进去。',
+      story: '把两股风流合成一个风核。',
       prediction: {
         text: '风核原有 4 点风力，又汇入 3 点。整体会是多少？',
         options: [1, 7, 12], answer: 7
       },
       primary: {
-        type: 'partWhole', prompt: '把右侧 3 点新风力逐个汇入原有的 4 点风核。',
+        type: 'partWhole', prompt: '把 3 点新风力汇进 4 点风核。',
         operation: 'combine', startCount: 4, changeCount: 3, target: 7,
         itemEmoji: '✦', startLabel: '原有风力', changeLabel: '新风力', resultLabel: '现在的整体'
       },
       expression: {
-        prompt: '哪个算式描述了“4 点原有风力和 3 点新风力合起来”？',
+        prompt: '哪个算式说出了「合起来」？',
         options: ['4 + 3 = 7', '7 - 3 = 10', '4 × 3 = 12'], answer: '4 + 3 = 7'
       },
       formal: '原有的 4 和新来的 3 是两个部分，合起来得到整体 7，所以用加法表示：4 + 3 = 7。',
       transfer: {
-        type: 'partWhole', story: '迁移任务：护盾原有 9 点能量，修复道路用掉 4 点。请移走用掉的部分。',
-        prompt: '这次不是合入，而是从整体中去掉一部分。',
+        type: 'partWhole', story: '新情境：风核 9 点能量，移走用掉的 4 点。',
+        prompt: '这次是从整体里去掉一部分。',
         operation: 'remove', startCount: 9, changeCount: 4, target: 5,
         itemEmoji: '◆', startLabel: '原有能量', changeLabel: '需要用掉', resultLabel: '剩余能量'
       },
@@ -93,23 +93,23 @@
       id: 'wind-array',
       type: 'array',
       title: '架设风阵 · 几组与每组',
-      story: '风塔需要整齐的阵列才能稳定。先预测总数，再分别调整排数和每排数量。',
+      story: '风塔要排成整齐的阵列。',
       prediction: {
         text: '3 排风灯，每排 4 盏，一共有多少盏？',
         options: [7, 12, 16], answer: 12
       },
       primary: {
-        type: 'array', prompt: '调整成 3 排、每排 4 盏。每次只改变一个量，观察总数怎样变化。',
+        type: 'array', prompt: '调成 3 排、每排 4 盏。',
         targetRows: 3, targetCols: 4, maxRows: 5, maxCols: 6, itemEmoji: '🏮', rowLabel: '排', colLabel: '每排'
       },
       expression: {
-        prompt: '哪个表达同时说明了“3 排”和“每排 4 盏”？',
+        prompt: '哪个说法同时有「3 排」和「每排 4 盏」？',
         options: ['3 × 4 = 12', '3 + 4 = 7', '12 ÷ 3 = 12'], answer: '3 × 4 = 12'
       },
       formal: '3 排、每排 4 盏，就是 3 个 4：4 + 4 + 4 = 12，也可以写成 3 × 4 = 12。',
       transfer: {
-        type: 'array', story: '迁移任务：搭建 2 层观测台，每层安装 5 个风铃。',
-        prompt: '把阵列调整成 2 层、每层 5 个风铃。',
+        type: 'array', story: '新情境：2 层塔，每层 5 个风铃。',
+        prompt: '调成 2 层、每层 5 个风铃。',
         targetRows: 2, targetCols: 5, maxRows: 5, maxCols: 6, itemEmoji: '🔔', rowLabel: '层', colLabel: '每层'
       },
       hints: {
@@ -122,23 +122,23 @@
       id: 'wind-equal-share',
       type: 'split',
       title: '疏通风道 · 平均分',
-      story: '三条救援风道需要同样多的风种。先预测每份数量，再亲手分配。',
+      story: '三条风道要一样多的风种。',
       prediction: {
         text: '12 颗平均分进 3 条风道，每条应该有几颗？',
         options: [3, 4, 6], answer: 4
       },
       primary: {
-        type: 'split', prompt: '把 12 颗风种分完，并让三条风道同样多。',
+        type: 'split', prompt: '12 颗分完，三条风道一样多。',
         itemEmoji: '✨', total: 12, groups: 3, groupLabels: ['北风道', '东风道', '西风道']
       },
       expression: {
-        prompt: '哪个算式描述了“12 颗平均分成 3 份，每份 4 颗”？',
+        prompt: '哪个算式说出了「平均分完」？',
         options: ['12 ÷ 3 = 4', '12 - 3 = 9', '12 + 3 = 15'], answer: '12 ÷ 3 = 4'
       },
       formal: '平均分有两个条件：全部分完，而且每份同样多。12 颗分成 3 份，每份 4 颗：12 ÷ 3 = 4。',
       transfer: {
-        type: 'split', story: '迁移任务：把 15 份补给平均送给 5 支巡逻队。',
-        prompt: '仍然要同时满足“分完”和“每队一样多”。',
+        type: 'split', story: '新情境：15 份补给平均分给 5 队。',
+        prompt: '还是要「分完」且「一样多」。',
         itemEmoji: '🎒', total: 15, groups: 5, groupLabels: ['一队', '二队', '三队', '四队', '五队']
       },
       hints: {

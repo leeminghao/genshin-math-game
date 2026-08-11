@@ -1249,6 +1249,7 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#btn-puzzle-check').addEventListener('click', checkMissionInteraction);
     $('#btn-puzzle-continue').addEventListener('click', advanceLearningMission);
     $('#btn-puzzle-exit').addEventListener('click', () => leaveChallenge('puzzle'));
+    $('#btn-skip-prediction').addEventListener('click', skipMissionPrediction);
     $('#btn-battle-exit').addEventListener('click', () => leaveChallenge('battle'));
 
     // 开放世界：点击地图移动（兼容触屏）
@@ -1576,12 +1577,20 @@ window.addEventListener('unhandledrejection', function(e) {
     // 对话点击继续
     $('#dialog-screen').addEventListener('click', (e) => {
       if (e.target.closest('.dialog-choice')) return;
+      if (e.target.closest('#btn-dialog-skip')) return;
       if (session.typing) {
         // 跳过打字
         finishTypingImmediately();
         return;
       }
       advanceDialog();
+    });
+    // 一键跳过整段对话
+    $('#btn-dialog-skip')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sfx('click');
+      trackEvent('dialog_skip', { remaining: session.dialogQueue.length - session.dialogIndex });
+      completeDialog();
     });
 
     // 技能按钮
@@ -4745,7 +4754,7 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#puzzle-story').textContent = mission.story;
     $('#puzzle-prediction-text').textContent = mission.prediction.text;
     setMissionStep(0, '先允许自己猜一猜，暂时不公布对错');
-    setPuzzleGuide('curious', '先说出第一种想法', '预测不是考试。选一个你现在相信的答案，随后用操作来检查它。');
+    setPuzzleGuide('curious', '先猜一猜', '选一个想法，动手验证。');
     applyMissionHintVisual();
     const options = $('#puzzle-prediction-options');
     options.innerHTML = '';
@@ -4779,6 +4788,18 @@ window.addEventListener('unhandledrejection', function(e) {
     renderMissionWorkspace();
   }
 
+  // 跳过预测：不想先猜也可以，直接动手（学习证据记为跳过，不评对错）
+  function skipMissionPrediction() {
+    const mission = session.currentPuzzle;
+    if (!mission || session.missionPhase !== 'prediction') return;
+    session.puzzlePrediction = null;
+    session.missionPredictionCorrect = false;
+    trackEvent('prediction_skip', { missionId: mission.id });
+    session.missionPhase = 'operate';
+    session.missionInteraction = createMissionInteraction(mission.primary);
+    renderMissionWorkspace();
+  }
+
   function renderMissionWorkspace() {
     const config = missionConfig();
     if (!config || !session.missionInteraction) return;
@@ -4796,10 +4817,8 @@ window.addEventListener('unhandledrejection', function(e) {
     );
     setPuzzleGuide(
       session.missionPhase === 'transfer' ? 'surprised' : 'curious',
-      session.missionPhase === 'transfer' ? '物件变了，关系还在吗？' : '轮到你亲手试一试',
-      session.missionPhase === 'transfer'
-        ? '先重新观察，不要照搬刚才的位置。一次只改变一个量。'
-        : '慢慢操作就好。每一步都会保留，你也可以把已经放好的物件取回来。'
+      session.missionPhase === 'transfer' ? '物件变了，关系还在吗？' : '亲手试一试',
+      session.missionPhase === 'transfer' ? '别照搬，重新摆一次。' : '放错了也能取回。'
     );
 
     if (config.type === 'match') renderMissionMatch(config);
@@ -5135,7 +5154,7 @@ window.addEventListener('unhandledrejection', function(e) {
       sfx('wrong');
       $('#puzzle-status').classList.add('error');
       $('#puzzle-status').textContent = `还没有满足条件。${result.observed}。${result.recovery}`;
-      setPuzzleGuide('thinking', '我们发现了一个线索', `${result.observed}。${result.recovery}`);
+      setPuzzleGuide('thinking', '发现线索', `${result.observed}。${result.recovery}`);
       persistMissionCheckpoint();
       return;
     }
@@ -5152,11 +5171,11 @@ window.addEventListener('unhandledrejection', function(e) {
     hideMissionPanels();
     $('#puzzle-expression').classList.remove('hidden');
     $('#mission-hints').classList.remove('hidden');
-    $('#puzzle-story').textContent = '把刚才看见和做过的动作，翻译成一句话或一个算式。';
+    $('#puzzle-story').textContent = '把刚才的动作说成一句话。';
     $('#puzzle-expression-text').textContent = mission.expression.prompt;
     $('#puzzle-error-card').classList.add('hidden');
     setMissionStep(2, '把动作翻译成语言和符号');
-    setPuzzleGuide('listening', '把刚才的动作讲给我听', '先回想你移动了什么、什么保持不变，再选择最贴近操作的句子。');
+    setPuzzleGuide('listening', '讲给我听', '选一句最像你刚才操作的。');
     const area = $('#puzzle-expression-options');
     area.innerHTML = '';
     mission.expression.options.forEach(option => {
@@ -5205,7 +5224,7 @@ window.addEventListener('unhandledrejection', function(e) {
       $('#puzzle-error-type').textContent = '语言与动作没有对应上';
       $('#puzzle-error-text').textContent = '这个表达没有完整描述刚才的操作。回看对象之间的关系，再选一次。';
       $('#puzzle-error-card').classList.remove('hidden');
-      setPuzzleGuide('thinking', '这句话还少了一点关系', '不用换答案去猜。回想刚才实际做的是配对、合并、分组、平均分，还是让两侧相等。');
+      setPuzzleGuide('thinking', '少了一点关系', '回想你刚才是配对、合并、分组还是配平。');
       sfx('wrong');
       persistMissionCheckpoint();
       return;
@@ -5224,18 +5243,23 @@ window.addEventListener('unhandledrejection', function(e) {
     session.missionPhase = 'verify';
     hideMissionPanels();
     $('#puzzle-formal').classList.remove('hidden');
-    $('#puzzle-story').textContent = '现在把最初的预测、亲手操作和形式表达放在一起检查。';
+    $('#puzzle-story').textContent = '预测和结果见面，核对一下。';
     $('.puzzle-success').textContent = '模型通过检验';
-    $('#puzzle-prediction-compare').classList.remove('hidden');
-    $('#puzzle-prediction-compare').textContent = session.missionPredictionCorrect
-      ? `你最初预测“${session.puzzlePrediction}”，操作结果支持这个预测。`
-      : `你最初预测“${session.puzzlePrediction}”。操作显示“${mission.prediction.answer}”，旧图像已经被新证据修正。`;
+    if (session.puzzlePrediction === null || session.puzzlePrediction === undefined) {
+      // 跳过预测的：不展示对比文案，直接给结论
+      $('#puzzle-prediction-compare').classList.add('hidden');
+    } else {
+      $('#puzzle-prediction-compare').classList.remove('hidden');
+      $('#puzzle-prediction-compare').textContent = session.missionPredictionCorrect
+        ? `你最初预测“${session.puzzlePrediction}”，操作结果支持这个预测。`
+        : `你最初预测“${session.puzzlePrediction}”。操作显示“${mission.prediction.answer}”，旧图像已经被新证据修正。`;
+    }
     $('#puzzle-formal-text').textContent = mission.formal;
     $('#puzzle-completion-note').classList.add('hidden');
     $('#btn-puzzle-continue').textContent = '进入迁移任务';
     setMissionStep(3, '用条件和算式校准刚才的直觉');
     setPuzzleGuide('proud', '预测和证据见面了', session.missionPredictionCorrect
-      ? '你的预测被操作支持了。再看看算式怎样把这个关系说得更精确。'
+      ? '猜对了！算式把它说得更准。'
       : '原来的预测已经被新证据修正。能找到哪里需要改变，就是一次真正的进步。');
     if (!resumed) {
       state.learning = Learning.recordEvidence(state.learning, {
@@ -5272,7 +5296,7 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#btn-puzzle-continue').textContent = '完成任务并查看世界变化';
     $('#btn-puzzle-exit').classList.add('hidden');
     setMissionStep(5, '能在新情境中重建，才算真正理解');
-    setPuzzleGuide('celebrating', '你把关系带到了新地方', '故事和物件都换了，但你重新构建出了同一种数学关系。世界正在回应你的操作。');
+    setPuzzleGuide('celebrating', '带到了新地方', '换了情境，关系没变。');
     saveGame();
     sfx('win');
     trackEvent('mission_transfer_complete', {

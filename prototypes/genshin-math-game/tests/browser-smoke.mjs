@@ -1104,6 +1104,15 @@ try {
   })`);
   assert.equal(report.commission.status, 'claimed', '完成条件后应可领奖');
   assert.equal(report.commission.gemsGain, 15, '委托奖励应为 15 钻石');
+  // 预测可跳过：直接进操作阶段（先标记 0-1 已完成，走任务卡复习入口）
+  await evaluate(`window.__game.state.player.completedLevels.push('0-0','0-1')`);
+  await evaluate('window.__game.startLevel(0,1)');
+  await waitFor('window.__game.session.missionPhase === "prediction"');
+  await evaluate('document.querySelector("#btn-skip-prediction").click()');
+  assert.equal(await evaluate('window.__game.session.missionPhase'), 'operate', '跳过预测应直进操作');
+  await evaluate('document.querySelector("#btn-puzzle-exit").click()');
+  await waitFor('document.querySelector(".screen.active")?.id === "region-detail"');
+  await evaluate(`delete window.__game.state.learning.missionCheckpoints['0-1']`);
 
   stage('交互汁水：飞入动画、距离标记、连击与帧停顿');
   await fresh();

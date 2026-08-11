@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <title>数境远征：艾瑟里亚数理冒险</title>
-  <link rel="stylesheet" href="css/style.css?v=6.8">
+  <link rel="stylesheet" href="css/style.css?v=6.9">
 </head>
 <body>
   <div id="app">
@@ -55,7 +55,7 @@
         </div>
         <div class="menu-guide-line"><span class="guide-dot"></span>星芽会陪你观察，答错也可以随时重来。</div>
       </div>
-      <div class="version">2D 开放世界 · 数境大陆 v6.8</div>
+      <div class="version">2D 开放世界 · 数境大陆 v6.9</div>
     </section>
 
     <!-- 三题能力诊断 -->
@@ -810,6 +810,7 @@
         <div class="puzzle-prediction" id="puzzle-prediction">
           <h3 id="puzzle-prediction-text"></h3>
           <div class="puzzle-prediction-options" id="puzzle-prediction-options"></div>
+          <button class="text-btn prediction-skip" id="btn-skip-prediction">先动手试试 →</button>
         </div>
         <div class="puzzle-workspace hidden" id="puzzle-workspace">
           <div class="puzzle-pool" id="puzzle-pool"></div>
@@ -857,6 +858,7 @@
       <div class="dialog-bg" id="dialog-bg"></div>
       <div class="dialog-character" id="dialog-character"></div>
       <div class="dialog-box">
+        <button class="dialog-skip" id="btn-dialog-skip" aria-label="跳过对话">跳过 ▸▸</button>
         <div class="dialog-speaker" id="dialog-speaker">星芽</div>
         <div class="dialog-text" id="dialog-text"></div>
         <div class="dialog-choices" id="dialog-choices"></div>
@@ -1095,8 +1097,8 @@
     </section>
   </div>
 
-  <script src="js/data.js?v=6.8"></script>
-  <script src="js/learning.js?v=6.8"></script>
-  <script src="js/game.js?v=6.8"></script>
+  <script src="js/data.js?v=6.9"></script>
+  <script src="js/learning.js?v=6.9"></script>
+  <script src="js/game.js?v=6.9"></script>
 </body>
 </html>
