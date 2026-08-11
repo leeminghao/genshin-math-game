@@ -475,6 +475,7 @@ window.addEventListener('unhandledrejection', function(e) {
     isMoving: false,
     moveMode: null,
     moveKeys: { w: false, a: false, s: false, d: false, arrowup: false, arrowdown: false, arrowleft: false, arrowright: false },
+    velX: 0, velY: 0,           // 移动速度向量（起步加速/松手滑行）
     // 虚拟摇杆向量（-1 ~ 1）
     joystick: { x: 0, y: 0, active: false },
     // 冲刺与体力（原神式：按住 Shift 加速，体力耗尽则无法冲刺）
@@ -872,6 +873,7 @@ window.addEventListener('unhandledrejection', function(e) {
       isMoving: false,
       moveMode: null,
       moveKeys: { w: false, a: false, s: false, d: false, arrowup: false, arrowdown: false, arrowleft: false, arrowright: false },
+      velX: 0, velY: 0,
       joystick: { x: 0, y: 0, active: false },
       sprintKey: false,
       stamina: 100,
@@ -975,6 +977,8 @@ window.addEventListener('unhandledrejection', function(e) {
     session.sprintKey = false;
     session.isMoving = false;
     session.moveMode = null;
+    session.velX = 0;
+    session.velY = 0;
     session.targetX = session.playerX;
     session.targetY = session.playerY;
   }
@@ -1318,10 +1322,8 @@ window.addEventListener('unhandledrejection', function(e) {
         session.moveKeys[key] = false;
         const anyMoveKeyPressed = Object.values(session.moveKeys).some(Boolean);
         if (!anyMoveKeyPressed && session.moveMode === 'keyboard') {
-          session.isMoving = false;
+          // 松手不立即停：moveMode 清空后由 updateMovement 的滑行衰减收尾
           session.moveMode = null;
-          session.targetX = session.playerX;
-          session.targetY = session.playerY;
         }
       }
     });
@@ -1334,10 +1336,8 @@ window.addEventListener('unhandledrejection', function(e) {
         session.moveKeys[moveKey] = false;
         button.classList.remove('pressed');
         if (session.moveMode === 'dpad' && !Object.values(session.moveKeys).some(Boolean)) {
-          session.isMoving = false;
+          // 松手滑行收尾，不立即停
           session.moveMode = null;
-          session.targetX = session.playerX;
-          session.targetY = session.playerY;
         }
       };
       button.addEventListener('pointerdown', event => {
@@ -2436,6 +2436,8 @@ window.addEventListener('unhandledrejection', function(e) {
         session.targetY = startY;
         session.isMoving = false;
         session.moveMode = null;
+        session.velX = 0;
+        session.velY = 0;
         Object.keys(session.moveKeys).forEach(key => { session.moveKeys[key] = false; });
         session.currentLandmark = null;
         session.currentWaypoint = null;
@@ -2744,14 +2746,15 @@ window.addEventListener('unhandledrejection', function(e) {
     }
 
     if (dx !== 0 || dy !== 0) {
-      // 直接控制移动，取消点击目标
+      // 直接控制移动：加速曲线逼近目标速度（起步有肉感，不是瞬时满速）
       session.isMoving = true;
       session.moveMode = 'keyboard';
       const len = Math.hypot(dx, dy);
-      const nx = dx / len;
-      const ny = dy / len;
-      session.playerX += nx * speed * dt;
-      session.playerY += ny * speed * dt;
+      const tx = (dx / len) * speed;
+      const ty = (dy / len) * speed;
+      const t = Math.min(1, dt * 10);
+      session.velX += (tx - session.velX) * t;
+      session.velY += (ty - session.velY) * t;
       // 记录方向
       if (Math.abs(dx) > Math.abs(dy)) {
         session.facing = dx > 0 ? 'right' : 'left';
@@ -2760,14 +2763,17 @@ window.addEventListener('unhandledrejection', function(e) {
       }
       session.walkCycle += dt * 8;
     } else if (session.isMoving && session.moveMode === 'target') {
-      // 点击移动
+      // 点击移动：同样走加速曲线
       const diffX = session.targetX - session.playerX;
       const diffY = session.targetY - session.playerY;
       const dist = Math.hypot(diffX, diffY);
-      if (dist > 4) {
-        session.playerX += (diffX / dist) * speed * dt;
-        session.playerY += (diffY / dist) * speed * dt;
-        // 记录方向
+      const stopDist = Math.max(6, speed * dt + 4);
+      if (dist > stopDist) {
+        const tx = (diffX / dist) * speed;
+        const ty = (diffY / dist) * speed;
+        const t = Math.min(1, dt * 10);
+        session.velX += (tx - session.velX) * t;
+        session.velY += (ty - session.velY) * t;
         if (Math.abs(diffX) > Math.abs(diffY)) {
           session.facing = diffX > 0 ? 'right' : 'left';
         } else {
@@ -2777,15 +2783,36 @@ window.addEventListener('unhandledrejection', function(e) {
       } else {
         session.playerX = session.targetX;
         session.playerY = session.targetY;
+        session.velX = 0;
+        session.velY = 0;
         session.isMoving = false;
         session.moveMode = null;
       }
-    } else if (session.moveMode === 'keyboard') {
-      session.isMoving = false;
-      session.moveMode = null;
-      session.targetX = session.playerX;
-      session.targetY = session.playerY;
+    } else {
+      // 松手滑行：指数衰减（约 27px），低速时停稳（原神式急停回弹感）
+      const decay = Math.exp(-9 * dt);
+      session.velX *= decay;
+      session.velY *= decay;
+      if (Math.hypot(session.velX, session.velY) < 10) {
+        session.velX = 0;
+        session.velY = 0;
+        session.isMoving = false;
+        if (session.moveMode === 'keyboard') {
+          session.moveMode = null;
+          session.targetX = session.playerX;
+          session.targetY = session.playerY;
+        }
+      }
     }
+
+    // 速度积分
+    session.playerX += session.velX * dt;
+    session.playerY += session.velY * dt;
+    // 滑行中保持行走动画
+    if (!session.isMoving && Math.hypot(session.velX, session.velY) >= 10) session.isMoving = true;
+
+    // 冲刺视野外扩（镜头容器轻推 3%，起跑的推进感）
+    $('#open-world')?.classList.toggle('sprint-zoom', sprinting);
 
     // 边界限制：整片数境大陆可走
     session.playerX = Math.max(60, Math.min(WORLD.W - 60, session.playerX));
@@ -2880,9 +2907,9 @@ window.addEventListener('unhandledrejection', function(e) {
     const worldW = WORLD.W;
     const worldH = WORLD.H;
 
-    // 镜头居中玩家
-    let camX = session.playerX - vw / 2;
-    let camY = session.playerY - vh / 2;
+    // 镜头居中玩家 + 向移动方向 lookahead（原神式预瞄）
+    let camX = session.playerX + (session.velX || 0) * 0.25 - vw / 2;
+    let camY = session.playerY + (session.velY || 0) * 0.25 - vh / 2;
 
     // 限制镜头边界
     camX = Math.max(0, Math.min(worldW - vw, camX));
@@ -3960,6 +3987,8 @@ window.addEventListener('unhandledrejection', function(e) {
     session.targetY = session.playerY;
     session.isMoving = false;
     session.moveMode = null;
+    session.velX = 0;
+    session.velY = 0;
     updatePlayerSprite();
     updateCamera();
     closeBigmap();
@@ -4051,6 +4080,8 @@ window.addEventListener('unhandledrejection', function(e) {
     session.targetY = session.playerY;
     session.isMoving = false;
     session.moveMode = null;
+    session.velX = 0;
+    session.velY = 0;
     updatePlayerSprite();
     updateCamera();
     $('#teleport-menu').classList.add('hidden');
@@ -4533,6 +4564,8 @@ window.addEventListener('unhandledrejection', function(e) {
       session.targetY = session.playerY;
       session.isMoving = false;
       session.moveMode = null;
+      session.velX = 0;
+      session.velY = 0;
       updatePlayerSprite();
       updateCamera();
       showHint(`去${mechForLevel.title}${mechForLevel.actionLabel}它！先收集周围材料`, 3000);

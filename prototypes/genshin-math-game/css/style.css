@@ -5031,3 +5031,13 @@ html.reduced-motion *::after {
   80% { opacity: 1; }
   100% { opacity: 0; transform: translateX(-50%) translateY(-18px); }
 }
+
+
+/* 冲刺视野外扩：起跑推进感 */
+#open-world {
+  transition: transform 0.35s ease;
+  transform-origin: center;
+}
+#open-world.sprint-zoom {
+  transform: scale(1.03);
+}
