@@ -143,7 +143,8 @@ async function enterWindRegion() {
 }
 
 async function choosePrediction() {
-  await waitFor('window.__game.session.missionPhase === "prediction"');
+  // 预测阶段已移除：若当前不在 prediction 阶段则直接跳过
+  if (!(await evaluate('window.__game.session.missionPhase === "prediction"'))) return;
   await evaluate(`(() => {
     const mission = window.__game.session.currentPuzzle;
     [...document.querySelectorAll('.prediction-option')]
@@ -456,14 +457,7 @@ try {
   await evaluate('window.__game.openMechanism("windmill")');
   await waitFor('!document.querySelector("#mechanism-panel").classList.contains("hidden")');
   assert.equal(await evaluate('window.__game.session.mapActive === true'), true);
-  await evaluate(`(() => {
-    document.querySelector('#estimate-plus').click();
-    document.querySelector('#estimate-plus').click();
-    document.querySelector('#estimate-plus').click();
-    document.querySelector('#btn-estimate-commit').click();
-  })()`);
-  await waitFor('!document.querySelector("#mechanism-fill").classList.contains("hidden")');
-  assert.equal(await evaluate('window.__game.session.mechanism.estimate'), 7);
+  await waitFor('!document.querySelector("#mechanism-fill").classList.contains("hidden")', 8000);
   // 放 7 颗 → 启动风车 → "太多"物理反馈，不应误完成
   await evaluate('(() => { for (let i = 0; i < 7; i++) document.querySelector("#btn-mech-place").click(); })()');
   await evaluate('document.querySelector("#btn-mech-verify").click()');
@@ -501,7 +495,6 @@ try {
     await evaluate(`window.__game.state.materials["${material}"] = 20`);
     await evaluate(`window.__game.openMechanism("${id}")`);
     await waitFor('!document.querySelector("#mechanism-panel").classList.contains("hidden")');
-    await evaluate('document.querySelector("#btn-estimate-commit").click()');
     await waitFor('!document.querySelector("#mechanism-fill").classList.contains("hidden")');
     await evaluate(runScript);
     await waitFor(`window.__game.state.player.completedLevels.includes("${levelId}")`, 15000);
@@ -533,7 +526,6 @@ try {
   await evaluate('window.__game.state.materials.plank = 20');
   await evaluate('window.__game.openMechanism("windbridge")');
   await waitFor('!document.querySelector("#mechanism-panel").classList.contains("hidden")');
-  await evaluate('document.querySelector("#btn-estimate-commit").click()');
   await waitFor('!document.querySelector("#mechanism-fill").classList.contains("hidden")');
   await evaluate(`(() => {
     for (let i = 0; i < 12; i++) document.querySelector('#btn-mech-place').click();
@@ -651,7 +643,7 @@ try {
   });
   assert.ok(report.windSlice.errorTypes.includes('language'));
   assert.ok(report.windSlice.errorTypes.includes('representation'));
-  for (const kind of ['prediction', 'model', 'explanation', 'verification', 'transfer']) {
+  for (const kind of ['model', 'explanation', 'verification', 'transfer']) {
     assert.ok(report.windSlice.evidenceKinds.includes(kind), `缺少 ${kind} 学习证据`);
   }
   assert.deepEqual(report.windSlice.checkpoints, {});
@@ -1074,7 +1066,6 @@ try {
   await evaluate('window.__game.state.materials.windSeed = 10');
   await evaluate('window.__game.openMechanism("starmill")');
   await waitFor('!document.querySelector("#mechanism-panel").classList.contains("hidden")');
-  await evaluate('document.querySelector("#btn-estimate-commit").click()');
   await waitFor('!document.querySelector("#mechanism-fill").classList.contains("hidden")');
   const gemsBeforeStar = await evaluate('window.__game.state.player.gems');
   await evaluate(`(() => { for (let i = 0; i < 8; i++) document.querySelector('#btn-mech-place').click(); document.querySelector('#btn-mech-verify').click(); })()`);
@@ -1104,12 +1095,11 @@ try {
   })`);
   assert.equal(report.commission.status, 'claimed', '完成条件后应可领奖');
   assert.equal(report.commission.gemsGain, 15, '委托奖励应为 15 钻石');
-  // 预测可跳过：直接进操作阶段（先标记 0-1 已完成，走任务卡复习入口）
+  // 预测阶段已移除：任务应直进操作阶段
   await evaluate(`window.__game.state.player.completedLevels.push('0-0','0-1')`);
   await evaluate('window.__game.startLevel(0,1)');
-  await waitFor('window.__game.session.missionPhase === "prediction"');
-  await evaluate('document.querySelector("#btn-skip-prediction").click()');
-  assert.equal(await evaluate('window.__game.session.missionPhase'), 'operate', '跳过预测应直进操作');
+  await waitFor('window.__game.session.missionPhase === "operate"');
+  assert.equal(await evaluate('window.__game.session.missionPhase'), 'operate', '任务应直进操作阶段');
   await evaluate('document.querySelector("#btn-puzzle-exit").click()');
   await waitFor('document.querySelector(".screen.active")?.id === "region-detail"');
   await evaluate(`delete window.__game.state.learning.missionCheckpoints['0-1']`);

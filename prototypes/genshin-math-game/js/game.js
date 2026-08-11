@@ -3433,17 +3433,10 @@ window.addEventListener('unhandledrejection', function(e) {
       return;
     }
 
-    if (m.estimate === null) {
-      // 估算阶段：让孩子自己写下一个数，建立承诺感
-      $('#mechanism-estimate').classList.remove('hidden');
-      $('#mechanism-fill').classList.add('hidden');
-      $('#estimate-prompt').textContent = mech.estimatePrompt || '大概要多少？';
-      $('#estimate-value').textContent = String(m.estimateValue);
-    } else {
-      $('#mechanism-estimate').classList.add('hidden');
-      $('#mechanism-fill').classList.remove('hidden');
-      renderMechInteraction(mech, m);
-    }
+    // 估算步骤已移除：开面板直接进投放，物理反馈说话
+    $('#mechanism-estimate').classList.add('hidden');
+    $('#mechanism-fill').classList.remove('hidden');
+    renderMechInteraction(mech, m);
   }
 
   function renderMechInteraction(mech, m) {
@@ -3736,21 +3729,10 @@ window.addEventListener('unhandledrejection', function(e) {
     const freeze = $('#mech-symbol-freeze');
     freeze.innerHTML = mech.symbols.join('<br>');
     freeze.classList.remove('hidden');
-    const estErr = m.estimate === null ? 99 : Math.abs(m.estimate - (mech.estimateTarget ?? 0));
-    trackEvent('mechanism_success', {
-      id: mech.id,
-      estimate: m.estimate,
-      target: mech.estimateTarget,
-      estimateError: estErr,
-      failCount: m.failCount
-    });
+    trackEvent('mechanism_success', { id: mech.id, failCount: m.failCount });
     setTimeout(() => {
       closeMechanism();
-      if (m.estimate !== null) {
-        showHint(estErr <= 1
-          ? `你猜 ${m.estimate}，正好 ${mech.estimateTarget}，估得真准！`
-          : `你猜 ${m.estimate}，实际需要 ${mech.estimateTarget}。下次先估再试！`, 3000);
-      }
+      showHint('修好啦！', 2500);
       finishMechanism(mech, m);
     }, 1800);
   }
@@ -3765,7 +3747,7 @@ window.addEventListener('unhandledrejection', function(e) {
       showHint(`${mech.title}修好了！+20 💎 +30 经验`, 3000);
       checkAchievements();
       saveGame();
-      trackEvent('practice_mechanism_complete', { id: mech.id, estimate: m.estimate, estimateError: m.estimate === null ? 99 : Math.abs(m.estimate - (mech.estimateTarget ?? 0)), failCount: m.failCount });
+      trackEvent('practice_mechanism_complete', { id: mech.id, failCount: m.failCount });
       return;
     }
     const regionId = LEVELS.findIndex(list => list.some(item => item.id === mech.levelId));
@@ -3773,8 +3755,7 @@ window.addEventListener('unhandledrejection', function(e) {
     if (!level) return;
     const region = REGIONS[regionId];
     const firstClear = !state.player.completedLevels.includes(level.id);
-    const estErr = m.estimate === null ? 99 : Math.abs(m.estimate - (mech.estimateTarget ?? 0));
-    const independentCorrect = (m.failCount === 0 ? 1 : 0) + (estErr <= 1 ? 1 : 0);
+    const independentCorrect = m.failCount === 0 ? 2 : (m.failCount <= 2 ? 1 : 0);
     const starsThisRun = Learning.calculateStars({
       questionCount: 2,
       independentCorrect,
@@ -4599,21 +4580,23 @@ window.addEventListener('unhandledrejection', function(e) {
     });
   }
 
-  // ========== 风语原学习任务：预测 → 操作 → 表达 → 检验 → 迁移 ==========
+  // ========== 风语原学习任务：操作 → 表达 → 检验 → 迁移（去预测化：直接动手） ==========
   function startLearningMission(mission) {
     const levelId = session.currentLevel.id;
     const checkpoint = state.learning.missionCheckpoints?.[levelId] || null;
     session.currentPuzzle = mission;
-    session.puzzlePrediction = checkpoint?.prediction ?? null;
-    session.missionPredictionCorrect = checkpoint?.predictionCorrect === true;
+    session.puzzlePrediction = null;
+    session.missionPredictionCorrect = false;
     session.missionExpressionAttempts = checkpoint?.expressionAttempts || 0;
     session.missionExpressionCorrect = checkpoint?.expressionCorrect === true;
     session.missionHintTier = checkpoint?.hintTier || 0;
     session.missionTransferAttempts = checkpoint?.transferAttempts || 0;
     session.missionPrimaryErrors = checkpoint?.primaryErrors || 0;
     session.missionErrorCount = checkpoint?.errorCount || 0;
-    session.missionResumed = Boolean(checkpoint && checkpoint.phase !== 'prediction');
-    session.missionPhase = checkpoint?.phase || 'prediction';
+    // 预测阶段已移除：任何停留在 prediction 的旧检查点都落到操作阶段
+    const checkpointPhase = checkpoint?.phase;
+    session.missionPhase = (checkpointPhase && checkpointPhase !== 'prediction') ? checkpointPhase : 'operate';
+    session.missionResumed = Boolean(checkpointPhase && checkpointPhase !== 'prediction' && checkpointPhase !== 'operate');
     const activeConfig = session.missionPhase === 'transfer' ? mission.transfer : mission.primary;
     session.missionInteraction = ['operate', 'express', 'transfer'].includes(session.missionPhase)
       ? createMissionInteraction(activeConfig, checkpoint?.interaction)
@@ -4626,11 +4609,9 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#puzzle-completion-note').classList.add('hidden');
     showScreen('puzzle-screen');
 
-    if (session.missionPhase === 'operate') renderMissionWorkspace();
-    else if (session.missionPhase === 'express') showMissionExpression({ resumed: true });
+    if (session.missionPhase === 'express') showMissionExpression({ resumed: true });
     else if (session.missionPhase === 'verify') showMissionVerification({ resumed: true });
-    else if (session.missionPhase === 'transfer') renderMissionWorkspace();
-    else showMissionPrediction();
+    else renderMissionWorkspace();
 
     trackEvent('mission_start', {
       missionId: mission.id,
@@ -4812,7 +4793,7 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#puzzle-status').classList.remove('error', 'success');
     $('#btn-puzzle-check').classList.remove('hidden');
     setMissionStep(
-      session.missionPhase === 'transfer' ? 4 : 1,
+      session.missionPhase === 'transfer' ? 3 : 0,
       session.missionPhase === 'transfer' ? '换了情境，重新观察关系' : '亲手改变对象，随时可以撤回'
     );
     setPuzzleGuide(
@@ -5174,7 +5155,7 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#puzzle-story').textContent = '把刚才的动作说成一句话。';
     $('#puzzle-expression-text').textContent = mission.expression.prompt;
     $('#puzzle-error-card').classList.add('hidden');
-    setMissionStep(2, '把动作翻译成语言和符号');
+    setMissionStep(1, '把动作翻译成语言和符号');
     setPuzzleGuide('listening', '讲给我听', '选一句最像你刚才操作的。');
     const area = $('#puzzle-expression-options');
     area.innerHTML = '';
@@ -5243,7 +5224,7 @@ window.addEventListener('unhandledrejection', function(e) {
     session.missionPhase = 'verify';
     hideMissionPanels();
     $('#puzzle-formal').classList.remove('hidden');
-    $('#puzzle-story').textContent = '预测和结果见面，核对一下。';
+    $('#puzzle-story').textContent = '看看你的操作结果。';
     $('.puzzle-success').textContent = '模型通过检验';
     if (session.puzzlePrediction === null || session.puzzlePrediction === undefined) {
       // 跳过预测的：不展示对比文案，直接给结论
@@ -5257,7 +5238,7 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#puzzle-formal-text').textContent = mission.formal;
     $('#puzzle-completion-note').classList.add('hidden');
     $('#btn-puzzle-continue').textContent = '进入迁移任务';
-    setMissionStep(3, '用条件和算式校准刚才的直觉');
+    setMissionStep(2, '用条件和算式校准刚才的直觉');
     setPuzzleGuide('proud', '预测和证据见面了', session.missionPredictionCorrect
       ? '猜对了！算式把它说得更准。'
       : '原来的预测已经被新证据修正。能找到哪里需要改变，就是一次真正的进步。');
@@ -5295,7 +5276,7 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#puzzle-completion-note').classList.remove('hidden');
     $('#btn-puzzle-continue').textContent = '完成任务并查看世界变化';
     $('#btn-puzzle-exit').classList.add('hidden');
-    setMissionStep(5, '能在新情境中重建，才算真正理解');
+    setMissionStep(3, '能在新情境中重建，才算真正理解');
     setPuzzleGuide('celebrating', '带到了新地方', '换了情境，关系没变。');
     saveGame();
     sfx('win');
