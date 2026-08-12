@@ -5060,3 +5060,27 @@ html.reduced-motion *::after {
 }
 .dialog-skip:hover { color: var(--gold-light); border-color: var(--gold); }
 .prediction-skip { display: block; margin: 12px auto 0; font-size: 14px; }
+
+
+/* ========== 实体投影：2D 立体感 ========== */
+.landmark-icon {
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4), 0 16px 10px -6px rgba(0,0,0,0.3);
+}
+.npc-icon {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3), 0 12px 8px -6px rgba(0,0,0,0.28);
+}
+.waypoint-icon {
+  box-shadow: 0 0 15px rgba(79,195,247,0.4), 0 12px 8px -6px rgba(0,0,0,0.3);
+}
+.chest-icon {
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4)) drop-shadow(0 10px 4px rgba(0,0,0,0.22));
+}
+.material {
+  filter: drop-shadow(0 0 6px rgba(116,194,168,0.7)) drop-shadow(0 8px 3px rgba(0,0,0,0.25));
+}
+.collectible {
+  filter: drop-shadow(0 8px 3px rgba(0,0,0,0.25));
+}
+.mech-entity-icon {
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3)) drop-shadow(0 12px 6px rgba(0,0,0,0.28));
+}

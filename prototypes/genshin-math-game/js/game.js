@@ -2552,11 +2552,61 @@ window.addEventListener('unhandledrejection', function(e) {
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate((b.rot * Math.PI) / 180);
+        ctx.scale(1, ry / rx);
+
+        if (b.kind === 'mountain') {
+          // 山体棱线：锯齿轮廓 + 左亮右暗双色，替代 fuzzy 色斑
+          const peaks = 6 + (Math.abs(b.x) % 3);
+          ctx.beginPath();
+          for (let i = 0; i <= peaks; i++) {
+            const t = i / peaks;
+            const px = -rx + t * 2 * rx;
+            const py = -ry * (0.35 + 0.55 * Math.abs(Math.sin(t * Math.PI * 2.5 + b.x * 0.01)));
+            if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+          }
+          ctx.lineTo(rx, ry * 0.9);
+          ctx.lineTo(-rx, ry * 0.9);
+          ctx.closePath();
+          const g = ctx.createLinearGradient(-rx, -ry, rx, ry);
+          g.addColorStop(0, hexToRgba('#b09a80', KIND_ALPHA.mountain + 0.12));
+          g.addColorStop(1, hexToRgba('#463c34', KIND_ALPHA.mountain + 0.12));
+          ctx.fillStyle = g;
+          ctx.fill();
+          // 棱线高光
+          ctx.strokeStyle = 'rgba(255,244,210,0.35)';
+          ctx.lineWidth = 2.2 * SCALE;
+          ctx.stroke();
+          ctx.restore();
+          return;
+        }
+
+        if (b.kind === 'sea' || b.kind === 'lake') {
+          // 岸线：浅滩圈 + 水体 + 水波线
+          ctx.beginPath();
+          ctx.arc(0, 0, rx * 1.07, 0, Math.PI * 2);
+          ctx.fillStyle = hexToRgba('#e6d5a7', 0.4);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(0, 0, rx, 0, Math.PI * 2);
+          const grad = ctx.createRadialGradient(0, 0, Math.min(rx, ry) * 0.15, 0, 0, rx);
+          grad.addColorStop(0, hexToRgba(b.color, KIND_ALPHA[b.kind]));
+          grad.addColorStop(1, hexToRgba(b.color, 0.1));
+          ctx.fillStyle = grad;
+          ctx.fill();
+          // 水波线：岸线内侧一圈亮线
+          ctx.beginPath();
+          ctx.arc(0, 0, rx * 0.96, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+          ctx.lineWidth = 2.5 * SCALE;
+          ctx.stroke();
+          ctx.restore();
+          return;
+        }
+
         const grad = ctx.createRadialGradient(0, 0, Math.min(rx, ry) * 0.15, 0, 0, Math.max(rx, ry));
         grad.addColorStop(0, hexToRgba(b.color, KIND_ALPHA[b.kind] ?? 0.5));
         grad.addColorStop(1, hexToRgba(b.color, 0));
         ctx.fillStyle = grad;
-        ctx.scale(1, ry / rx);
         ctx.beginPath();
         ctx.arc(0, 0, rx, 0, Math.PI * 2);
         ctx.fill();
@@ -2575,6 +2625,49 @@ window.addEventListener('unhandledrejection', function(e) {
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
       }
+
+      // 值噪声细节层：小网格生成后放大叠加，全图有机斑驳（固定种子可复现）
+      const noiseRand = mulberry32(20260725);
+      const gw = 24, gh = 14;
+      const lattice = Array.from({ length: (gw + 1) * (gh + 1) }, () => noiseRand());
+      const gw2 = 48, gh2 = 28;
+      const lattice2 = Array.from({ length: (gw2 + 1) * (gh2 + 1) }, () => noiseRand());
+      const sampleNoise = (lattice, gw2x, gh2x, nx, ny) => {
+        const x0 = Math.floor(nx), y0 = Math.floor(ny);
+        const fx = nx - x0, fy = ny - y0;
+        const sx = (1 - Math.cos(fx * Math.PI)) / 2;
+        const sy = (1 - Math.cos(fy * Math.PI)) / 2;
+        const i00 = y0 * (gw2x + 1) + x0;
+        const top = lattice[i00] + (lattice[i00 + 1] - lattice[i00]) * sx;
+        const bottom = lattice[i00 + gw2x + 1] + (lattice[i00 + gw2x + 2] - lattice[i00 + gw2x + 1]) * sx;
+        return top + (bottom - top) * sy;
+      };
+      const nw = 240, nh = 144;
+      const noiseC = document.createElement('canvas');
+      noiseC.width = nw; noiseC.height = nh;
+      const nctx = noiseC.getContext('2d');
+      const img = nctx.createImageData(nw, nh);
+      for (let py = 0; py < nh; py++) {
+        for (let px = 0; px < nw; px++) {
+          const v1 = sampleNoise(lattice, gw, gh, (px / nw) * gw, (py / nh) * gh);
+          const v2 = sampleNoise(lattice2, gw2, gh2, (px / nw) * gw2, (py / nh) * gh2);
+          const v = (v1 * 0.65 + v2 * 0.35) - 0.5; // -0.5..0.5
+          const idx = (py * nw + px) * 4;
+          const base = 128 + v * 90;
+          img.data[idx] = base;
+          img.data[idx + 1] = base;
+          img.data[idx + 2] = base;
+          img.data[idx + 3] = 255;
+        }
+      }
+      nctx.putImageData(img, 0, 0);
+      ctx.save();
+      ctx.globalCompositeOperation = 'overlay';
+      ctx.globalAlpha = 0.55;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(noiseC, 0, 0, ground.width, ground.height);
+      ctx.restore();
+
       // 颗粒噪点：增加地表细节
       for (let i = 0; i < 4500; i++) {
         const x = bakeRand() * ground.width, y = bakeRand() * ground.height;
@@ -2585,6 +2678,14 @@ window.addEventListener('unhandledrejection', function(e) {
         ctx.arc(x, y, 0.6 + bakeRand() * 1.4, 0, Math.PI * 2);
         ctx.fill();
       }
+
+      // 方向光：左上暖光、右下冷影，全图立体感
+      const light = ctx.createLinearGradient(0, 0, ground.width, ground.height);
+      light.addColorStop(0, 'rgba(255,244,200,0.12)');
+      light.addColorStop(0.55, 'rgba(255,255,255,0)');
+      light.addColorStop(1, 'rgba(28,48,80,0.14)');
+      ctx.fillStyle = light;
+      ctx.fillRect(0, 0, ground.width, ground.height);
     };
     if (texture.complete && texture.naturalWidth) bakeTexture();
     else {
