@@ -1531,6 +1531,17 @@ window.addEventListener('unhandledrejection', function(e) {
         tryEnterRegion(session.currentLandmark);
       }
     });
+    // 关卡列表（复习入口）：任何时候都能打开
+    $('#btn-review-levels')?.addEventListener('click', () => {
+      if (session.currentLandmark !== null) {
+        sfx('click');
+        session.lastMapX = session.playerX;
+        session.lastMapY = session.playerY;
+        session.mapActive = false;
+        $('#region-enter-prompt').classList.add('hidden');
+        showRegionDetail(session.currentLandmark);
+      }
+    });
 
     // 教程关闭
     $('#btn-close-tutorial').addEventListener('click', () => {
@@ -4523,6 +4534,14 @@ window.addEventListener('unhandledrejection', function(e) {
       return;
     }
     sfx('click');
+    // 风语原直达：还有没修好的机关时不开关卡菜单，直接留在地图上，光柱指路
+    if (rid === 0 && Object.values(MECHANISMS).some(m => m.levelId && !m.restored())) {
+      $('#region-enter-prompt').classList.add('hidden');
+      showGuideBeam(8000);
+      showHint('跟着光柱走！', 2500);
+      trackEvent('region_enter_direct', { region: rid });
+      return;
+    }
     // 保存当前位置，返回地图时恢复
     session.lastMapX = session.playerX;
     session.lastMapY = session.playerY;
@@ -5223,6 +5242,16 @@ window.addEventListener('unhandledrejection', function(e) {
       firstTry,
       hintTier: session.missionHintTier
     });
+    // 「检验我的操作」成功本身就是一次检验证据（检验页已并入操作反馈）
+    if (result.correct && !isTransfer) {
+      state.learning = Learning.recordEvidence(state.learning, {
+        levelId: session.currentLevel.id,
+        kind: 'verification',
+        success: true,
+        independent: firstTry && session.missionHintTier < 3,
+        hintTier: session.missionHintTier
+      });
+    }
     trackEvent('mission_interaction_check', {
       levelId: session.currentLevel.id,
       phase: session.missionPhase,
@@ -5253,29 +5282,32 @@ window.addEventListener('unhandledrejection', function(e) {
     hideMissionPanels();
     $('#puzzle-expression').classList.remove('hidden');
     $('#mission-hints').classList.remove('hidden');
-    $('#puzzle-story').textContent = '把刚才的动作说成一句话。';
+    $('#puzzle-story').textContent = '把刚才的动作拼成算式。';
     $('#puzzle-expression-text').textContent = mission.expression.prompt;
     $('#puzzle-error-card').classList.add('hidden');
     setMissionStep(1, '把动作翻译成语言和符号');
-    setPuzzleGuide('listening', '讲给我听', '选一句最像你刚才操作的。');
+    setPuzzleGuide('listening', '讲给我听', '点卡片拼出你刚才的操作。');
     const area = $('#puzzle-expression-options');
     area.innerHTML = '';
-    mission.expression.options.forEach(option => {
-      const button = document.createElement('button');
-      button.className = 'expression-option';
-      button.textContent = option;
-      button.addEventListener('click', () => chooseMissionExpression(option, button));
-      area.appendChild(button);
-    });
+    if (Array.isArray(mission.expression.tokens)) {
+      renderMissionChips(mission, area);
+    } else {
+      mission.expression.options.forEach(option => {
+        const button = document.createElement('button');
+        button.className = 'expression-option';
+        button.textContent = option;
+        button.addEventListener('click', () => chooseMissionExpression(option, button));
+        area.appendChild(button);
+      });
+    }
     updateMissionHintButtons();
     persistMissionCheckpoint();
     if (resumed) trackEvent('mission_checkpoint_resumed', { levelId: session.currentLevel.id, phase: 'express' });
   }
 
-  function chooseMissionExpression(option, button) {
-    if (session.missionPhase !== 'express') return;
+  // 表达结算（选项选择与拼算式共用）
+  function resolveMissionExpression(correct, observed) {
     const mission = session.currentPuzzle;
-    const correct = String(option) === String(mission.expression.answer);
     session.missionExpressionAttempts++;
     const firstTry = session.missionExpressionAttempts === 1;
     state.learning = Learning.recordEvidence(state.learning, {
@@ -5285,8 +5317,8 @@ window.addEventListener('unhandledrejection', function(e) {
       independent: correct && firstTry && session.missionHintTier < 3,
       hintTier: session.missionHintTier,
       errorType: correct ? null : 'language',
-      expected: mission.expression.answer,
-      observed: option,
+      expected: mission.expression.equation || mission.expression.answer,
+      observed,
       recovery: '回想刚才实际做的是配对、合并、分组、平均分，还是让两侧相等。'
     });
     state.learning = Learning.recordAttempt(state.learning, {
@@ -5298,26 +5330,117 @@ window.addEventListener('unhandledrejection', function(e) {
       hintTier: session.missionHintTier
     });
     trackEvent('mission_expression', { levelId: session.currentLevel.id, correct, firstTry });
-
     if (!correct) {
       session.missionErrorCount++;
+      sfx('wrong');
+      persistMissionCheckpoint();
+      return false;
+    }
+    session.missionExpressionCorrect = true;
+    sfx('correct');
+    saveGame();
+    // 检验页已移除：表达成功直接进迁移，算式在迁移完成时定格
+    setTimeout(() => startMissionTransfer(), 320);
+    return true;
+  }
+
+  // 拼算式：从卡片池点选，拼出与操作一致的等式（搭，不是选）
+  function renderMissionChips(mission, area) {
+    const cfg = mission.expression;
+    const tokens = cfg.tokens;
+    const bank = [...tokens, ...(cfg.distractors || [])].map(text => ({ text, used: false }));
+    for (let i = bank.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [bank[i], bank[j]] = [bank[j], bank[i]];
+    }
+    const built = [];
+    let fails = 0;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'chip-expr';
+    const buildEl = document.createElement('div');
+    buildEl.className = 'chip-build';
+    const bankEl = document.createElement('div');
+    bankEl.className = 'chip-bank';
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'genshin-btn primary';
+    confirmBtn.id = 'btn-chips-confirm';
+    confirmBtn.textContent = '拼好啦！';
+
+    function refresh() {
+      buildEl.innerHTML = built.length ? '' : '<span class="chip-placeholder">点下面的卡片拼算式</span>';
+      built.forEach((bankIndex, pos) => {
+        const chip = bank[bankIndex];
+        const b = document.createElement('button');
+        b.className = 'expr-chip built';
+        b.textContent = chip.text;
+        b.addEventListener('click', () => {
+          built.splice(pos, 1);
+          chip.used = false;
+          sfx('click');
+          refresh();
+        });
+        buildEl.appendChild(b);
+      });
+      bankEl.innerHTML = '';
+      bank.forEach((chip, bankIndex) => {
+        const b = document.createElement('button');
+        b.className = 'expr-chip' + (chip.used ? ' used' : '');
+        b.textContent = chip.text;
+        b.disabled = chip.used;
+        // 两次失败后的磁吸引导：下一张正确卡片发光
+        if (fails >= 2 && !chip.used && chip.text === tokens[built.length]) b.classList.add('magnetic');
+        b.addEventListener('click', () => {
+          chip.used = true;
+          built.push(bankIndex);
+          sfx('click');
+          refresh();
+        });
+        bankEl.appendChild(b);
+      });
+    }
+
+    confirmBtn.addEventListener('click', () => {
+      if (!built.length) return;
+      const builtStr = built.map(i => bank[i].text).join('');
+      const correct = builtStr === cfg.equation;
+      if (!correct) {
+        fails++;
+        $('#puzzle-error-type').textContent = '算式还没对上';
+        $('#puzzle-error-text').textContent = fails >= 2 ? '发光的卡片是下一张要放的。' : '回想你刚才操作的数量，再拼一次。';
+        $('#puzzle-error-card').classList.remove('hidden');
+        refresh();
+      } else {
+        $('#puzzle-error-card').classList.add('hidden');
+        confirmBtn.disabled = true;
+        $$('.expr-chip').forEach(chip => { chip.disabled = true; });
+      }
+      resolveMissionExpression(correct, builtStr);
+    });
+
+    wrap.appendChild(buildEl);
+    wrap.appendChild(bankEl);
+    wrap.appendChild(confirmBtn);
+    area.appendChild(wrap);
+    refresh();
+  }
+
+  function chooseMissionExpression(option, button) {
+    if (session.missionPhase !== 'express') return;
+    const mission = session.currentPuzzle;
+    const correct = String(option) === String(mission.expression.answer);
+    const ok = resolveMissionExpression(correct, option);
+    if (!ok) {
       button.classList.add('wrong');
       button.disabled = true;
       $('#puzzle-error-type').textContent = '语言与动作没有对应上';
       $('#puzzle-error-text').textContent = '这个表达没有完整描述刚才的操作。回看对象之间的关系，再选一次。';
       $('#puzzle-error-card').classList.remove('hidden');
       setPuzzleGuide('thinking', '少了一点关系', '回想你刚才是配对、合并、分组还是配平。');
-      sfx('wrong');
-      persistMissionCheckpoint();
       return;
     }
-
-    session.missionExpressionCorrect = true;
     button.classList.add('correct');
     $$('.expression-option').forEach(item => { item.disabled = true; });
-    sfx('correct');
-    saveGame();
-    setTimeout(() => showMissionVerification(), 320);
   }
 
   function showMissionVerification({ resumed = false } = {}) {
@@ -5370,7 +5493,8 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#puzzle-story').textContent = session.currentPuzzle.transfer.story;
     $('.puzzle-success').textContent = '迁移成功，世界开始改变';
     $('#puzzle-prediction-compare').classList.add('hidden');
-    $('#puzzle-formal-text').textContent = '物体和故事改变了，但你重新识别了同一个数学关系，而不是照搬上一幅画面。';
+    // 检验页已并入此刻：算式在这里定格
+    $('#puzzle-formal-text').textContent = session.currentPuzzle.formal;
     const independentExplanation = session.missionExpressionAttempts === 1 && session.missionHintTier < 3;
     const independentTransfer = session.missionTransferAttempts === 1 && session.missionHintTier < 3;
     $('#puzzle-completion-note').textContent = `完成修复 ✓　讲清关系 ${independentExplanation ? '✓' : '△'}　独立迁移 ${independentTransfer ? '✓' : '△'}`;

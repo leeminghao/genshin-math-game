@@ -5084,3 +5084,64 @@ html.reduced-motion *::after {
 .mech-entity-icon {
   filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3)) drop-shadow(0 12px 6px rgba(0,0,0,0.28));
 }
+
+
+/* ========== 拼算式 ========== */
+.chip-expr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.chip-build {
+  min-height: 62px;
+  min-width: 260px;
+  padding: 8px 14px;
+  border: 2px dashed rgba(232,212,154,0.5);
+  border-radius: 14px;
+  background: rgba(17,24,39,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.chip-placeholder {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.chip-bank {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.expr-chip {
+  min-width: 52px;
+  height: 52px;
+  padding: 0 12px;
+  border: 2px solid rgba(232,212,154,0.45);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(45,58,79,0.95), rgba(26,35,50,0.98));
+  color: var(--gold-light);
+  font-size: 20px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.12s, border-color 0.15s;
+  touch-action: manipulation;
+}
+.expr-chip:hover { transform: translateY(-2px); border-color: var(--gold); }
+.expr-chip.used { opacity: 0.25; }
+.expr-chip.built {
+  border-color: var(--element-anemo);
+  background: rgba(116,194,168,0.18);
+}
+.expr-chip.magnetic {
+  border-color: #ffd964;
+  box-shadow: 0 0 14px rgba(255,217,100,0.8);
+  animation: magnetic-pulse 0.9s ease-in-out infinite;
+}
+@keyframes magnetic-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}

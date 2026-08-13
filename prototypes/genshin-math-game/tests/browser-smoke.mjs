@@ -217,6 +217,29 @@ async function solveVisibleInteraction() {
 
 async function submitCorrectExpression({ wrongFirst = false } = {}) {
   await waitFor('window.__game.session.missionPhase === "express"');
+  const hasChips = await evaluate('!!document.querySelector(".chip-bank")');
+  if (hasChips) {
+    // 拼算式：先拼错一张验证提示，再拼正确序列
+    if (wrongFirst) {
+      await evaluate(`(() => {
+        const chip = [...document.querySelectorAll('.chip-bank .expr-chip:not(.used)')][0];
+        chip.click();
+        document.querySelector('#btn-chips-confirm').click();
+      })()`);
+      await waitFor('!document.querySelector("#puzzle-error-card").classList.contains("hidden")');
+      await evaluate(`document.querySelector('.chip-build .expr-chip')?.click()`);
+    }
+    await evaluate(`(() => {
+      const tokens = window.__game.session.currentPuzzle.expression.tokens;
+      tokens.forEach(text => {
+        [...document.querySelectorAll('.chip-bank .expr-chip:not(.used)')]
+          .find(c => c.textContent === text).click();
+      });
+      document.querySelector('#btn-chips-confirm').click();
+    })()`);
+    await waitFor('window.__game.session.missionPhase === "transfer"');
+    return;
+  }
   if (wrongFirst) {
     await evaluate(`(() => {
       const answer = window.__game.session.currentPuzzle.expression.answer;
@@ -230,7 +253,7 @@ async function submitCorrectExpression({ wrongFirst = false } = {}) {
     [...document.querySelectorAll('.expression-option')]
       .find(button => button.textContent === String(answer)).click();
   })()`);
-  await waitFor('window.__game.session.missionPhase === "verify"');
+  await waitFor('window.__game.session.missionPhase === "transfer"');
 }
 
 async function finishCurrentMission({ wrongPrimary = false, wrongExpression = false, hintTier = 0 } = {}) {
@@ -256,8 +279,7 @@ async function finishCurrentMission({ wrongPrimary = false, wrongExpression = fa
   await solveVisibleInteraction();
   await evaluate('document.querySelector("#btn-puzzle-check").click()');
   await submitCorrectExpression({ wrongFirst: wrongExpression });
-  await evaluate('document.querySelector("#btn-puzzle-continue").click()');
-  await waitFor('window.__game.session.missionPhase === "transfer"');
+  // 检验页已移除：表达成功直接进迁移
   await solveVisibleInteraction();
   await evaluate('document.querySelector("#btn-puzzle-check").click()');
   await waitFor('window.__game.session.missionPhase === "complete"');
@@ -1151,6 +1173,12 @@ try {
   report.combo = await evaluate('document.querySelectorAll(".combo-pop").length');
   assert.ok(report.combo >= 1, '3 连击应跳出连击大字');
 
+  // 区域直达：机关未修完时，进入风语原不打开关卡菜单
+  await evaluate('window.__game.showScreen("world-map"); window.__game.renderMap()');
+  await sleep(500);
+  await evaluate(`window.__game.session.currentLandmark = 0; window.__game.tryEnterRegion(0)`);
+  assert.equal(await evaluate('document.querySelector(".screen.active")?.id'), 'world-map', '机关未完时应直达地图');
+
   stage('弹窗锁移动、损坏存档与旧存档迁移');
   await fresh();
   await evaluate('document.querySelector("#btn-map-settings").click()');
@@ -1270,6 +1298,10 @@ try {
     viewport: [390, 844], joystickVisible: true, joystickInside: true, actionBtnInside: true, headerInside: true, horizontalOverflow: false
   });
   await capture('06-mobile-map');
+  // 先标记风语原机关全修复，enterWindRegion 才会打开关卡菜单（直达规则）
+  await evaluate(`Object.assign(window.__game.state.map.worldChanges, {
+    windmillRestored: true, windcoreLit: true, windtowerLit: true, bridgeOpened: true, stormCalmed: true
+  })`);
   await enterWindRegion();
   // 移动端布局验证用：直接标记 0-0/0-1 完成以解锁复习入口（机关路径已在前面阶段覆盖）
   await evaluate(`window.__game.state.player.completedLevels.push('0-0','0-1');

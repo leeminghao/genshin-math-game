@@ -41,9 +41,10 @@
         itemEmoji: '🍃', slotEmoji: '🌀', itemLabel: '风种', slotLabel: '风槽', count: 6, slots: 6
       },
       expression: {
-        prompt: '哪句话最像你刚才的操作？',
+        prompt: '拼出刚才的算式',
         options: ['6 颗风种和 6 个风槽一一对应', '6 颗风种只需要 5 个风槽', '每个风槽要放 2 颗风种'],
-        answer: '6 颗风种和 6 个风槽一一对应'
+        answer: '6 颗风种和 6 个风槽一一对应',
+        equation: '6=6', tokens: ['6', '=', '6'], distractors: ['5', '2', '−']
       },
       formal: '6 颗风种 ↔ 6 个风槽。两边各有 6 个，每颗只配一个位置，所以没有重复、没有遗漏，也没有剩余。',
       transfer: {
@@ -73,8 +74,9 @@
         itemEmoji: '✦', startLabel: '原有风力', changeLabel: '新风力', resultLabel: '现在的整体'
       },
       expression: {
-        prompt: '哪个算式说出了「合起来」？',
-        options: ['4 + 3 = 7', '7 - 3 = 10', '4 × 3 = 12'], answer: '4 + 3 = 7'
+        prompt: '拼出刚才的算式',
+        options: ['4 + 3 = 7', '7 - 3 = 10', '4 × 3 = 12'], answer: '4 + 3 = 7',
+        equation: '4+3=7', tokens: ['4', '+', '3', '=', '7'], distractors: ['−', '10']
       },
       formal: '原有的 4 和新来的 3 是两个部分，合起来得到整体 7，所以用加法表示：4 + 3 = 7。',
       transfer: {
@@ -103,8 +105,9 @@
         targetRows: 3, targetCols: 4, maxRows: 5, maxCols: 6, itemEmoji: '🏮', rowLabel: '排', colLabel: '每排'
       },
       expression: {
-        prompt: '哪个说法同时有「3 排」和「每排 4 盏」？',
-        options: ['3 × 4 = 12', '3 + 4 = 7', '12 ÷ 3 = 12'], answer: '3 × 4 = 12'
+        prompt: '拼出刚才的算式',
+        options: ['3 × 4 = 12', '3 + 4 = 7', '12 ÷ 3 = 12'], answer: '3 × 4 = 12',
+        equation: '3×4=12', tokens: ['3', '×', '4', '=', '12'], distractors: ['+', '7']
       },
       formal: '3 排、每排 4 盏，就是 3 个 4：4 + 4 + 4 = 12，也可以写成 3 × 4 = 12。',
       transfer: {
@@ -132,8 +135,9 @@
         itemEmoji: '✨', total: 12, groups: 3, groupLabels: ['北风道', '东风道', '西风道']
       },
       expression: {
-        prompt: '哪个算式说出了「平均分完」？',
-        options: ['12 ÷ 3 = 4', '12 - 3 = 9', '12 + 3 = 15'], answer: '12 ÷ 3 = 4'
+        prompt: '拼出刚才的算式',
+        options: ['12 ÷ 3 = 4', '12 - 3 = 9', '12 + 3 = 15'], answer: '12 ÷ 3 = 4',
+        equation: '12÷3=4', tokens: ['12', '÷', '3', '=', '4'], distractors: ['−', '9']
       },
       formal: '平均分有两个条件：全部分完，而且每份同样多。12 颗分成 3 份，每份 4 颗：12 ÷ 3 = 4。',
       transfer: {
@@ -162,9 +166,10 @@
         leftStart: 3, rightStart: 6, pool: 3, target: 6, itemEmoji: '◈', leftLabel: '左侧风压', rightLabel: '右侧风压'
       },
       expression: {
-        prompt: '哪句话解释了为什么风暴现在平衡？',
+        prompt: '拼出刚才的算式',
         options: ['左侧 3 + 3 = 6，与右侧相等', '右侧 6 + 3 = 9，所以更强', '只要备用风力用完就一定平衡'],
-        answer: '左侧 3 + 3 = 6，与右侧相等'
+        answer: '左侧 3 + 3 = 6，与右侧相等',
+        equation: '3+3=6', tokens: ['3', '+', '3', '=', '6'], distractors: ['−', '9']
       },
       formal: '平衡不等于“把东西用完”，而是两侧数量相等。左侧从 3 补到 6，与右侧的 6 相同。',
       transfer: {
