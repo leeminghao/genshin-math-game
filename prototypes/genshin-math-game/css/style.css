@@ -5145,3 +5145,61 @@ html.reduced-motion *::after {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.12); }
 }
+
+
+/* ========== 大风车主角化 ========== */
+.big-windmill {
+  width: 150px;
+  margin-left: -75px;
+  z-index: 6;
+}
+.windmill-svg {
+  width: 132px;
+  height: 165px;
+  display: block;
+  filter: drop-shadow(0 10px 14px rgba(0,0,0,0.35));
+}
+.windmill-rotor {
+  transform-origin: 60px 45px;
+}
+.windmill.restored .windmill-rotor {
+  animation: rotor-spin 3.2s linear infinite;
+}
+@keyframes rotor-spin {
+  100% { transform: rotate(360deg); }
+}
+/* 其余机关同步放大一号 */
+.mech-entity-icon {
+  font-size: 64px;
+}
+#starmill-change .mech-entity-icon,
+#echoscale-change .mech-entity-icon {
+  font-size: 56px;
+}
+
+
+/* ========== 云影过境 ========== */
+.cloud-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 11;
+}
+.cloud-shadow {
+  position: absolute;
+  background: radial-gradient(ellipse, rgba(28, 46, 66, 0.10), transparent 68%);
+  border-radius: 50%;
+  filter: blur(26px);
+  animation: cloud-drift linear infinite;
+  will-change: transform;
+}
+.cloud-shadow.c1 { width: 820px; height: 230px; top: 8%; animation-duration: 68s; }
+.cloud-shadow.c2 { width: 620px; height: 190px; top: 46%; animation-duration: 92s; animation-delay: -30s; }
+.cloud-shadow.c3 { width: 980px; height: 260px; top: 72%; animation-duration: 54s; animation-delay: -12s; }
+@keyframes cloud-drift {
+  from { transform: translateX(-1100px); }
+  to { transform: translateX(calc(100vw + 1200px)); }
+}
+/* 舒缓动画偏好：关闭云影 */
+html.reduced-motion .cloud-layer { display: none; }

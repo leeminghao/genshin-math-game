@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <title>数境远征：艾瑟里亚数理冒险</title>
-  <link rel="stylesheet" href="css/style.css?v=7.2">
+  <link rel="stylesheet" href="css/style.css?v=7.3">
 </head>
 <body>
   <div id="app">
@@ -55,7 +55,7 @@
         </div>
         <div class="menu-guide-line"><span class="guide-dot"></span>星芽会陪你观察，答错也可以随时重来。</div>
       </div>
-      <div class="version">2D 开放世界 · 数境大陆 v7.2</div>
+      <div class="version">2D 开放世界 · 数境大陆 v7.3</div>
     </section>
 
     <!-- 三题能力诊断 -->
@@ -490,9 +490,22 @@
   <div class="hidden-area" style="left: 5400px; top: 3100px;" data-area="ocean-cave">
     <div class="hidden-icon">✨</div>
   </div>
-  <div class="world-change windmill" id="windmill-change" style="left: 1640px; top: 2420px;">
-    <div class="windmill-tower">🏠</div>
-    <div class="windmill-blades">✣</div>
+  <div class="world-change windmill big-windmill" id="windmill-change" style="left: 1640px; top: 2420px;">
+    <svg class="windmill-svg" viewBox="0 0 120 150" aria-hidden="true">
+      <!-- 塔身 -->
+      <path d="M40 150 L50 55 L70 55 L80 150 Z" fill="#c9a876"/>
+      <path d="M50 55 L70 55 L74 70 L46 70 Z" fill="#a8854f"/>
+      <rect x="53" y="112" width="14" height="26" rx="6" fill="#5a4030"/>
+      <circle cx="60" cy="90" r="6" fill="#3a2c20"/>
+      <!-- 四叶大叶片 -->
+      <g class="windmill-rotor">
+        <path d="M60 45 L60 2 L72 12 L64 45 Z" fill="#f2e3c2"/>
+        <path d="M60 45 L103 45 L93 57 L60 49 Z" fill="#f2e3c2"/>
+        <path d="M60 45 L60 88 L48 78 L56 45 Z" fill="#f2e3c2"/>
+        <path d="M60 45 L17 45 L27 33 L60 41 Z" fill="#f2e3c2"/>
+        <circle cx="60" cy="45" r="7" fill="#8a6f4d"/>
+      </g>
+    </svg>
     <div class="world-change-label">沉睡的风车</div>
     <div class="repair-badge">🔧</div>
   </div>
@@ -630,6 +643,12 @@
         </div>
         <!-- 区域粒子氛围层：飘叶/飘雪/飞尘，按所在区域切换 -->
         <div class="particle-layer" id="particle-layer"></div>
+        <!-- 云影过境：大朵云影横飘，世界立刻活起来 -->
+        <div class="cloud-layer" id="cloud-layer" aria-hidden="true">
+          <div class="cloud-shadow c1"></div>
+          <div class="cloud-shadow c2"></div>
+          <div class="cloud-shadow c3"></div>
+        </div>
       </div>
 
       <header class="map-header">
@@ -1098,8 +1117,8 @@
     </section>
   </div>
 
-  <script src="js/data.js?v=7.2"></script>
-  <script src="js/learning.js?v=7.2"></script>
-  <script src="js/game.js?v=7.2"></script>
+  <script src="js/data.js?v=7.3"></script>
+  <script src="js/learning.js?v=7.3"></script>
+  <script src="js/game.js?v=7.3"></script>
 </body>
 </html>
