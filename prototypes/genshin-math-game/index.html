@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <title>数境远征：艾瑟里亚数理冒险</title>
-  <link rel="stylesheet" href="css/style.css?v=7.3">
+  <link rel="stylesheet" href="css/style.css?v=7.5">
 </head>
 <body>
   <div id="app">
@@ -55,7 +55,7 @@
         </div>
         <div class="menu-guide-line"><span class="guide-dot"></span>星芽会陪你观察，答错也可以随时重来。</div>
       </div>
-      <div class="version">2D 开放世界 · 数境大陆 v7.3</div>
+      <div class="version">2D 开放世界 · 数境大陆 v7.5</div>
     </section>
 
     <!-- 三题能力诊断 -->
@@ -649,6 +649,9 @@
           <div class="cloud-shadow c2"></div>
           <div class="cloud-shadow c3"></div>
         </div>
+        <!-- 伪纵深：顶部大气透视带 + 底部暖色暗角（2D 视错觉，不动坐标） -->
+        <div class="depth-haze" aria-hidden="true"></div>
+        <div class="depth-vignette" aria-hidden="true"></div>
       </div>
 
       <header class="map-header">
@@ -1117,8 +1120,8 @@
     </section>
   </div>
 
-  <script src="js/data.js?v=7.3"></script>
-  <script src="js/learning.js?v=7.3"></script>
-  <script src="js/game.js?v=7.3"></script>
+  <script src="js/data.js?v=7.5"></script>
+  <script src="js/learning.js?v=7.5"></script>
+  <script src="js/game.js?v=7.5"></script>
 </body>
 </html>

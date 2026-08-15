@@ -3752,9 +3752,9 @@ html.reduced-motion *::after {
 .quest-task button { flex: 0 0 auto; min-width: 72px; }
 
 /* 超大地形装饰 */
-.deco-small { position: absolute; font-size: 24px; opacity: 0.4; pointer-events: none; z-index: 2; }
-.deco-medium { position: absolute; font-size: 36px; opacity: 0.5; pointer-events: none; z-index: 2; }
-.deco-large { position: absolute; font-size: 56px; opacity: 0.6; pointer-events: none; z-index: 2; }
+.deco-small { position: absolute; font-size: 26px; opacity: 0.42; pointer-events: none; z-index: 2; }
+.deco-medium { position: absolute; font-size: 42px; opacity: 0.55; pointer-events: none; z-index: 2; }
+.deco-large { position: absolute; font-size: 68px; opacity: 0.62; pointer-events: none; z-index: 2; }
 
 /* 中间村庄/遗迹 */
 .village { position: absolute; width: 80px; height: 80px; margin-left: -40px; margin-top: -40px; z-index: 4; }
@@ -5203,3 +5203,44 @@ html.reduced-motion *::after {
 }
 /* 舒缓动画偏好：关闭云影 */
 html.reduced-motion .cloud-layer { display: none; }
+
+
+/* ========== 伪纵深：大气透视 ========== */
+.depth-haze {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 34%;
+  background: linear-gradient(180deg, rgba(216,234,240,0.32), rgba(216,234,240,0));
+  pointer-events: none;
+  z-index: 12;
+}
+.depth-vignette {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 18%;
+  background: linear-gradient(0deg, rgba(64,52,34,0.16), transparent);
+  pointer-events: none;
+  z-index: 12;
+}
+
+/* ========== 村庄聚落：一座变三座 ========== */
+.village-icon { position: relative; }
+.village-icon::before,
+.village-icon::after {
+  position: absolute;
+  bottom: -4px;
+  z-index: 3;
+  filter: drop-shadow(0 4px 4px rgba(0,0,0,0.3));
+}
+.village-icon::before {
+  content: '🏠';
+  left: -28px;
+  font-size: 22px;
+  opacity: 0.9;
+}
+.village-icon::after {
+  content: '🛖';
+  right: -28px;
+  font-size: 19px;
+  opacity: 0.85;
+}

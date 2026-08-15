@@ -2548,16 +2548,19 @@ window.addEventListener('unhandledrejection', function(e) {
     const bakeTexture = () => {
       if (!texture.complete || !texture.naturalWidth) return;
       ctx.save();
-      ctx.globalAlpha = 0.15;
-      ctx.filter = 'saturate(0.5) brightness(1.05)';
-      ctx.drawImage(texture, 0, 0, ground.width, ground.height);
+      // 手绘全景插画作为地面主底：覆盖铺满（cover），插画的区域色彩天然对应各区域
+      const coverScale = Math.max(ground.width / texture.naturalWidth, ground.height / texture.naturalHeight);
+      const drawW = texture.naturalWidth * coverScale;
+      const drawH = texture.naturalHeight * coverScale;
+      ctx.globalAlpha = 0.72;
+      ctx.drawImage(texture, (ground.width - drawW) / 2, (ground.height - drawH) / 2, drawW, drawH);
       ctx.restore();
       bakeTerrain();
     };
     texture.src = VISUAL_ASSETS.world;
     // 地形与颗粒（纹理未缓存时先出素底，纹理就绪后覆盖重绘）
     const bakeTerrain = () => {
-      const KIND_ALPHA = { ground: 0.3, sea: 0.5, island: 0.42, lake: 0.48, land: 0.5, mountain: 0.45, snow: 0.42, canyon: 0.42 };
+      const KIND_ALPHA = { ground: 0.2, sea: 0.32, island: 0.28, lake: 0.3, land: 0.3, mountain: 0.3, snow: 0.28, canyon: 0.28 };
       LAYOUT.blobs.forEach(b => {
         const x = b.x * SCALE, y = b.y * SCALE, rx = b.rx * SCALE, ry = b.ry * SCALE;
         ctx.save();
@@ -2743,27 +2746,39 @@ window.addEventListener('unhandledrejection', function(e) {
     const pick = arr => arr[Math.floor(rand() * arr.length)];
     const addDeco = (x, y, emoji) => {
       const el = document.createElement('div');
-      const roll = rand(); // 大:中:小 ≈ 1:3:6
-      el.className = roll < 0.1 ? 'deco-large' : roll < 0.4 ? 'deco-medium' : 'deco-small';
+      const roll = rand(); // 大:中:小 ≈ 1:1.4:1（聚簇里大物为主）
+      el.className = roll < 0.25 ? 'deco-large' : roll < 0.6 ? 'deco-medium' : 'deco-small';
       el.style.left = Math.round(clampX(x)) + 'px';
       el.style.top = Math.round(clampY(y)) + 'px';
       el.textContent = emoji;
       decoLayer.appendChild(el);
     };
-    // 每个区域 60-90 个，按元素选 emoji
+    // 每个区域 12-16 个聚簇（每簇 3-5 个），少而大，成片的生态感
     LAYOUT.regions.forEach(rg => {
       const pool = ELEMENT_DECOS[REGIONS[rg.id]?.element] || ELEMENT_DECOS.anemo;
-      const count = 60 + Math.floor(rand() * 31);
-      for (let i = 0; i < count; i++) {
-        const ang = rand() * Math.PI * 2;
-        const dist = Math.sqrt(rand()) * 880;
-        addDeco(rg.x + Math.cos(ang) * dist, rg.y + Math.sin(ang) * dist * 0.85, pick(pool));
+      const clusters = 12 + Math.floor(rand() * 5);
+      for (let c = 0; c < clusters; c++) {
+        const cAng = rand() * Math.PI * 2;
+        const cDist = Math.sqrt(rand()) * 880;
+        const cx = rg.x + Math.cos(cAng) * cDist;
+        const cy = rg.y + Math.sin(cAng) * cDist * 0.85;
+        const n = 3 + Math.floor(rand() * 3);
+        const anchor = pick(pool);
+        for (let i = 0; i < n; i++) {
+          const ang = rand() * Math.PI * 2;
+          const d = Math.sqrt(rand()) * 150;
+          addDeco(cx + Math.cos(ang) * d, cy + Math.sin(ang) * d, rand() < 0.55 ? anchor : pick(pool));
+        }
       }
     });
-    // 全图稀疏野生装饰 ~80 个
+    // 全图稀疏野生装饰 40 个（减半，且两三成对出现）
     const wild = ['🌾', '🍃', '🌼', '🌱', '🍄', '🌿', '🌸', '🪨'];
-    for (let i = 0; i < 80; i++) {
-      addDeco(100 + rand() * (WORLD.W - 200), 100 + rand() * (WORLD.H - 200), pick(wild));
+    for (let i = 0; i < 40; i++) {
+      const wx = 100 + rand() * (WORLD.W - 200);
+      const wy = 100 + rand() * (WORLD.H - 200);
+      const wemoji = pick(wild);
+      addDeco(wx, wy, wemoji);
+      if (rand() < 0.4) addDeco(wx + 30 + rand() * 60, wy + 30 + rand() * 60, wemoji);
     }
     // 道路沿线每 ~250px 点缀（带抖动）
     LAYOUT.roads.forEach(road => {
@@ -3912,6 +3927,15 @@ window.addEventListener('unhandledrejection', function(e) {
   }
 
   // ========== 全屏探险地图 ==========
+  let worldMapImage = null;
+  function getWorldMapImage() {
+    if (!worldMapImage) {
+      worldMapImage = new Image();
+      worldMapImage.src = VISUAL_ASSETS.world;
+    }
+    return worldMapImage;
+  }
+
   function openBigmap() {
     drawBigmap();
     $('#bigmap-modal').classList.remove('hidden');
@@ -3952,26 +3976,25 @@ window.addEventListener('unhandledrejection', function(e) {
       return `rgba(${(value >> 16) & 255},${(value >> 8) & 255},${value & 255},${alpha})`;
     };
 
-    // 深色底 + 地形简图
-    ctx.fillStyle = '#1a2332';
-    ctx.fillRect(0, 0, w, h);
-    if (LAYOUT && Array.isArray(LAYOUT.blobs)) {
-      LAYOUT.blobs.forEach(b => {
-        const alpha = b.kind === 'sea' ? 0.6 : b.kind === 'lake' ? 0.55 : 0.3;
-        const x = b.x * scaleX, y = b.y * scaleY;
-        const rx = b.rx * scaleX, ry = b.ry * scaleY;
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate((b.rot * Math.PI) / 180);
-        const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(rx, ry));
-        grad.addColorStop(0, hexToRgba(b.color, alpha));
-        grad.addColorStop(1, hexToRgba(b.color, 0));
-        ctx.fillStyle = grad;
-        ctx.scale(1, ry / rx);
-        ctx.beginPath(); ctx.arc(0, 0, rx, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
-      });
+    // 手绘全景插画为底（与大世界地面同一张图，孩子一眼认出"这就是我跑的地方"）
+    const worldImg = getWorldMapImage();
+    if (worldImg.complete && worldImg.naturalWidth) {
+      const coverScale = Math.max(w / worldImg.naturalWidth, h / worldImg.naturalHeight);
+      const drawW = worldImg.naturalWidth * coverScale;
+      const drawH = worldImg.naturalHeight * coverScale;
+      ctx.drawImage(worldImg, (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
+      // 轻微压暗让标记更醒目
+      ctx.fillStyle = 'rgba(10,16,26,0.28)';
+      ctx.fillRect(0, 0, w, h);
+    } else {
+      ctx.fillStyle = '#1a2332';
+      ctx.fillRect(0, 0, w, h);
+      // 图片未就绪时先出素底，加载完成后重绘
+      worldImg.addEventListener('load', () => {
+        if (!$('#bigmap-modal').classList.contains('hidden')) drawBigmap();
+      }, { once: true });
     }
+    // 插画已提供地形，不再叠色块
 
     // 道路
     ctx.strokeStyle = 'rgba(200,176,138,0.6)';
