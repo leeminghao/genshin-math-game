@@ -2552,8 +2552,12 @@ window.addEventListener('unhandledrejection', function(e) {
       const coverScale = Math.max(ground.width / texture.naturalWidth, ground.height / texture.naturalHeight);
       const drawW = texture.naturalWidth * coverScale;
       const drawH = texture.naturalHeight * coverScale;
-      ctx.globalAlpha = 0.72;
+      ctx.globalAlpha = 0.35;
       ctx.drawImage(texture, (ground.width - drawW) / 2, (ground.height - drawH) / 2, drawW, drawH);
+      // 卡通化统一：盖一层柔和浅色，压掉插画细节噪音
+      ctx.globalAlpha = 0.34;
+      ctx.fillStyle = '#dcebd2';
+      ctx.fillRect(0, 0, ground.width, ground.height);
       ctx.restore();
       bakeTerrain();
     };
