@@ -1343,7 +1343,7 @@ try {
   report.fog.overlayCached = await evaluate(`!!(window.__game.session.fogCaches && Object.keys(window.__game.session.fogCaches).length)`);
   assert.ok(report.fog.overlayCached, '小地图雾面缓存应已生成');
 
-  stage('镇守宝箱：守卫触发与破防解锁');
+  stage('镇守宝箱：守卫触发、血量、武器先制与破防解锁');
   await fresh();
   report.guard = await evaluate(`(() => {
     const chests = document.querySelectorAll('.chest');
@@ -1354,17 +1354,50 @@ try {
   })()`);
   assert.equal(report.guard.guardedCount, 6, '应有 6 个镇守宝箱');
   assert.equal(report.guard.guardEls, 6, '应生成 6 只守卫怪');
-  // 靠近 0 号宝箱（8500,2500）的守卫（+78,-40）
+  // 装备高攻武器（attackBonus 40 ≥ 20）验证先制：3 血守卫开局变 2 血
+  await evaluate(`window.__game.state.inventory.weapons.push('flame');window.__game.state.equipment.weapon='flame'`);
+  // 靠近 0 号宝箱（8500,2500）的守卫（+78,-40）；先等控件解锁，守卫检测在 200ms tick 内
+  await waitFor('window.__game.session.controlsLocked === false');
   await evaluate(`Object.assign(window.__game.session,{playerX:8578,playerY:2460,targetX:8578,targetY:2460,isMoving:false,moveMode:null});window.__game.updatePlayerSprite()`);
-  await sleep(700);
-  assert.ok(await evaluate(`!document.querySelector('#guard-modal').classList.contains('hidden')`), '靠近守卫应触发破防战');
-  // 答对破防题 → 守卫清除、宝箱解锁
-  const guardAnswer = await evaluate('window.__game.session.guardAnswer');
-  await evaluate(`[...document.querySelectorAll('#guard-options .guard-option')].find(b => +b.textContent === ${guardAnswer})?.click()`);
-  await sleep(700);
-  assert.ok(await evaluate('window.__game.state.map.chestGuardsCleared.includes(0)'), '答对后 0 号宝箱守卫应清除');
+  await waitFor(`!document.querySelector('#guard-modal').classList.contains('hidden')`);
+  report.guard.hpAfterPreempt = await evaluate('window.__game.session.guardHp');
+  assert.equal(report.guard.hpAfterPreempt, 2, '武器先制后 3 血守卫应剩 2 血');
+  // 连答 2 题打空血量 → 守卫清除、宝箱解锁
+  for (let i = 0; i < 2; i++) {
+    const ans = await evaluate('window.__game.session.guardAnswer');
+    await evaluate(`[...document.querySelectorAll('#guard-options .guard-option')].find(b => +b.textContent === ${ans})?.click()`);
+    await sleep(650);
+  }
+  assert.ok(await evaluate('window.__game.state.map.chestGuardsCleared.includes(0)'), '打空血量后 0 号宝箱守卫应清除');
   report.guard.unlocked = await evaluate(`!document.querySelectorAll('.chest')[0].classList.contains('guarded')`);
   assert.ok(report.guard.unlocked, '破防后宝箱应解锁（去掉 guarded）');
+
+  stage('数学视野：全屏滤镜与守卫显形');
+  await fresh();
+  await waitFor('window.__game.session.controlsLocked === false');
+  await evaluate('window.__game.useMathVision()');
+  await sleep(400);
+  report.vision = await evaluate(`({
+    filterOn: document.body.classList.contains('math-vision-on'),
+    cooling: document.querySelector('#btn-math-vision').classList.contains('cooling')
+  })`);
+  assert.ok(report.vision.filterOn, '数学视野开启时 body 应加滤镜 class');
+  assert.ok(report.vision.cooling, '数学视野按钮应进入冷却');
+  await evaluate('window.__game.session.visionUntil = 0;window.__game.updateMathVisionMarks()');
+  assert.ok(!(await evaluate('document.body.classList.contains("math-vision-on")')), '视野结束后滤镜应移除');
+
+  stage('导航线：常显与终点脉冲圈');
+  await fresh();
+  // 远离目标（风车 1640,2420）：导航线应常显，脉冲圈定位到目标
+  await evaluate(`Object.assign(window.__game.session,{playerX:4000,playerY:2500,targetX:4000,targetY:2500,isMoving:false,moveMode:null});window.__game.updatePlayerSprite()`);
+  await waitFor(`!document.querySelector('#guide-path').classList.contains('hidden')`);
+  report.guide = await evaluate(`({
+    ringVisible: !document.querySelector('#guide-target-ring').classList.contains('hidden'),
+    ringLeft: parseInt(document.querySelector('#guide-target-ring').style.left),
+    ringTop: parseInt(document.querySelector('#guide-target-ring').style.top)
+  })`);
+  assert.ok(report.guide.ringVisible, '远离目标时终点脉冲圈应显示');
+  assert.deepEqual([report.guide.ringLeft, report.guide.ringTop], [1640, 2420], '脉冲圈应指向风车');
 
   report.runtimeExceptions = runtimeExceptions;
   assert.deepEqual(runtimeExceptions, [], `浏览器运行时异常：${runtimeExceptions.join('; ')}`);

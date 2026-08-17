@@ -3310,19 +3310,26 @@ window.addEventListener('unhandledrejection', function(e) {
     el.classList.remove('hidden');
   }
 
-  // 地面引导虚线：玩家 → 目标，蚂蚁线流向目标方向
+  // 地面引导虚线：玩家 → 目标，蚂蚁线流向目标方向；终点加金色脉冲圈（原神式目的地标记）
   function updateGuidePath(target) {
     const svg = $('#guide-path');
     const line = $('#guide-path-line');
+    const ring = $('#guide-target-ring');
     if (!svg || !line) return;
     if (!target) {
       svg.classList.add('hidden');
+      ring?.classList.add('hidden');
       return;
     }
     const midX = (session.playerX + target.x) / 2;
     const midY = (session.playerY + target.y) / 2 - 40;
     line.setAttribute('d', `M ${session.playerX} ${session.playerY} Q ${midX} ${midY} ${target.x} ${target.y}`);
     svg.classList.remove('hidden');
+    if (ring) {
+      ring.style.left = target.x + 'px';
+      ring.style.top = target.y + 'px';
+      ring.classList.remove('hidden');
+    }
   }
 
   // ========== 数学视野：一键高亮附近可交互物（30 秒冷却，只提示附近范围） ==========
@@ -3345,13 +3352,16 @@ window.addEventListener('unhandledrejection', function(e) {
   function updateMathVisionMarks() {
     const now = performance.now();
     const active = now < (session.visionUntil || 0);
+    // 全屏金色滤镜：元素视野的"世界变色"感
+    document.body.classList.toggle('math-vision-on', active);
     const px = session.playerX;
     const py = session.playerY;
     const groups = [
       ['.collectible', 520],
       ['.chest', 520],
       ['.material', 560],
-      ['.hidden-area', 520]
+      ['.hidden-area', 520],
+      ['.guard-monster', 700]
     ];
     groups.forEach(([sel, radius]) => {
       $$(sel).forEach(el => {
@@ -3368,8 +3378,14 @@ window.addEventListener('unhandledrejection', function(e) {
       if (!el) return;
       el.classList.toggle('vision-mark', active && Math.hypot(px - mech.x, py - mech.y) < 900);
     });
-    // 冷却中的按钮样式
-    $('#btn-math-vision')?.classList.toggle('cooling', now < (session.visionCooldownUntil || 0));
+    // 冷却中的按钮样式 + 环形进度（--cdp 0..1）
+    const btn = $('#btn-math-vision');
+    if (btn) {
+      const cooling = now < (session.visionCooldownUntil || 0);
+      btn.classList.toggle('cooling', cooling);
+      const cdp = cooling ? (session.visionCooldownUntil - now) / 30000 : 0;
+      btn.style.setProperty('--cdp', cdp.toFixed(3));
+    }
   }
 
   // ========== 区域粒子氛围：飘叶/飘雪/飞尘，按所在区域切换 ==========
@@ -4452,37 +4468,52 @@ window.addEventListener('unhandledrejection', function(e) {
     });
   }
 
-  // ========== 镇守宝箱：偏远宝箱有怪物看守，答对破防题清除守卫后解锁 ==========
-  // key = 宝箱 DOM 序号（index.html 内 .chest 顺序），value = 守卫外观
-  const GUARDED_CHESTS = { 0: '🦇', 1: '🕷️', 2: '🐺', 3: '👾', 4: '🦂', 7: '🦖' };
+  // ========== 镇守宝箱：偏远宝箱有怪物看守，破防战打空守卫血量后解锁 ==========
+  // key = 宝箱 DOM 序号（index.html 内 .chest 顺序）；hp = 需要答对的题数
+  const GUARDED_CHESTS = {
+    0: { emoji: '🦇', hp: 3 },
+    1: { emoji: '🕷️', hp: 3 },
+    2: { emoji: '🐺', hp: 2 },
+    3: { emoji: '👾', hp: 2 },
+    4: { emoji: '🦂', hp: 2 },
+    7: { emoji: '🦖', hp: 3 }
+  };
 
   // 按存档状态重建守卫实体（幂等）：未开启且未清除的镇守宝箱才有守卫
   function syncGuardMonsters() {
     $$('.guard-monster').forEach(el => el.remove());
     const cleared = Array.isArray(state.map?.chestGuardsCleared) ? state.map.chestGuardsCleared : [];
     $$('.chest').forEach((chest, idx) => {
-      const emoji = GUARDED_CHESTS[idx];
-      const guarded = emoji && !session.openedChests.includes(idx) && !cleared.includes(idx);
+      const def = GUARDED_CHESTS[idx];
+      const guarded = def && !session.openedChests.includes(idx) && !cleared.includes(idx);
       chest.classList.toggle('guarded', !!guarded);
       if (!guarded) return;
       const el = document.createElement('div');
       el.className = 'guard-monster';
       el.dataset.chest = idx;
-      el.textContent = emoji;
+      el.textContent = def.emoji;
       el.style.left = (parseInt(chest.style.left) + 78) + 'px';
       el.style.top = (parseInt(chest.style.top) - 40) + 'px';
       $('#world-canvas').appendChild(el);
     });
   }
 
-  // 靠近守卫触发破防战（守卫浮在宝箱旁 78px，触发半径 85）
+  // 靠近守卫触发破防战；260px 内先冒 ❗ 预警（原神式仇恨提示，每守卫每次进图一次）
   function checkGuardProximity() {
     if (session.guardBattleChest != null) return;
+    session.guardAlerted = session.guardAlerted || new Set();
     $$('.guard-monster').forEach(el => {
       const x = parseInt(el.style.left);
       const y = parseInt(el.style.top);
       if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-      if (Math.hypot(session.playerX - x, session.playerY - y) < 85) openGuardBattle(parseInt(el.dataset.chest));
+      const dist = Math.hypot(session.playerX - x, session.playerY - y);
+      const chestIdx = parseInt(el.dataset.chest);
+      if (dist < 260 && !session.guardAlerted.has(chestIdx)) {
+        session.guardAlerted.add(chestIdx);
+        el.classList.add('alerted');
+        sfx('wrong');
+      }
+      if (dist < 85) openGuardBattle(chestIdx);
     });
   }
 
@@ -4512,12 +4543,34 @@ window.addEventListener('unhandledrejection', function(e) {
     return { text: `${a} ${op} ${b} = ?`, answer: ans, options: [...opts].sort(() => Math.random() - 0.5) };
   }
 
+  function renderGuardHp() {
+    const el = $('#guard-hp');
+    if (el) el.textContent = '❤️'.repeat(Math.max(0, session.guardHp || 0)) || '💀';
+  }
+
   function openGuardBattle(chestIdx) {
     if (session.guardBattleChest != null) return;
     session.guardBattleChest = chestIdx;
+    const def = GUARDED_CHESTS[chestIdx] || { emoji: '👾', hp: 2 };
+    session.guardHp = def.hp;
+    // 武器先制：装备 attackBonus ≥ 20 的武器，开战先削 1 格血（武器价值体感）
+    const weapon = WEAPONS.find(w => w.id === state.equipment?.weapon);
+    const preempt = (weapon?.attackBonus || 0) >= 20 && session.guardHp > 1;
+    if (preempt) session.guardHp -= 1;
+    $('#guard-emoji').textContent = def.emoji;
+    $('#guard-tip').textContent = preempt
+      ? `${weapon.emoji} ${weapon.name} 先制攻击！守卫还没反应过来就掉了 1 格血！`
+      : '答对破防题，打空守卫血量就能解锁宝箱！';
+    renderGuardHp();
+    nextGuardQuestion();
+    $('#guard-modal').classList.remove('hidden');
+    syncControlsLock();
+    sfx('burst');
+  }
+
+  function nextGuardQuestion() {
     const q = genGuardQuestion();
     session.guardAnswer = q.answer;
-    $('#guard-emoji').textContent = GUARDED_CHESTS[chestIdx] || '👾';
     $('#guard-question').textContent = q.text;
     const box = $('#guard-options');
     box.innerHTML = '';
@@ -4528,16 +4581,22 @@ window.addEventListener('unhandledrejection', function(e) {
       btn.addEventListener('click', () => answerGuardBattle(opt, btn));
       box.appendChild(btn);
     });
-    $('#guard-modal').classList.remove('hidden');
-    syncControlsLock();
-    sfx('burst');
   }
 
   function answerGuardBattle(opt, btn) {
     const chestIdx = session.guardBattleChest;
     if (chestIdx == null) return;
     if (opt === session.guardAnswer) {
-      // 破防成功：守卫爆掉，宝箱解锁
+      session.guardHp -= 1;
+      sfx('correct');
+      if (session.guardHp > 0) {
+        // 还有血：破防一截，出下一题
+        renderGuardHp();
+        $$('#guard-options .guard-option').forEach(b => b.disabled = true);
+        setTimeout(nextGuardQuestion, 450);
+        return;
+      }
+      // 血空：守卫爆掉，宝箱解锁
       if (!state.map.chestGuardsCleared.includes(chestIdx)) state.map.chestGuardsCleared.push(chestIdx);
       const guardEl = $(`.guard-monster[data-chest="${chestIdx}"]`);
       if (guardEl) {
@@ -4566,6 +4625,7 @@ window.addEventListener('unhandledrejection', function(e) {
   function closeGuardBattle() {
     session.guardBattleChest = null;
     session.guardAnswer = null;
+    session.guardHp = 0;
     $('#guard-modal').classList.add('hidden');
     syncControlsLock();
     focusWorldMap();
@@ -4652,6 +4712,19 @@ window.addEventListener('unhandledrejection', function(e) {
 
     // 战争迷雾：未探索区盖暗色，地标/传送点/玩家在其上方始终可见
     try { ctx.drawImage(fogOverlayCanvas(w, h, 'rgba(7,12,20,0.82)'), 0, 0); } catch (e) {}
+
+    // 区域名标签：只显示已探索过的区域（原神式"到过才知名"）
+    if (LAYOUT && Array.isArray(LAYOUT.regions)) {
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      LAYOUT.regions.forEach(rg => {
+        const cellIdx = Math.floor(rg.y / FOG_CELL) * FOG_COLS + Math.floor(rg.x / FOG_CELL);
+        if (!session.exploredSet?.has(cellIdx)) return;
+        ctx.fillStyle = 'rgba(255,244,214,0.85)';
+        ctx.fillText(`${REGIONS[rg.id]?.emoji || ''} ${rg.name}`, rg.x * scaleX, rg.y * scaleY - 14);
+      });
+    }
 
     const diamond = (x, y, s) => {
       ctx.beginPath();
@@ -7242,6 +7315,9 @@ window.addEventListener('unhandledrejection', function(e) {
     updateCamera,
     tryEnterRegion,
     openSkillTree,
-    openMechanism
+    openMechanism,
+    useMathVision,
+    updateMathVisionMarks,
+    revealArea
   };
 })();

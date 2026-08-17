@@ -5306,3 +5306,48 @@ html.reduced-motion .cloud-layer { display: none; }
 }
 .guard-option:hover { background: rgba(255,233,168,0.22); transform: scale(1.05); }
 .guard-option.wrong { background: rgba(220,60,60,0.35); border-color: #e06060; }
+
+/* ========== v7.8 阶段2~5深化 ========== */
+/* 数学视野全屏金色滤镜（元素视野的世界变色感） */
+body.math-vision-on #open-world {
+  filter: sepia(0.35) saturate(1.25) brightness(1.05);
+  transition: filter 0.35s;
+}
+#open-world { transition: filter 0.35s; }
+
+/* 数学视野按钮冷却环形进度 */
+#btn-math-vision { position: relative; }
+#btn-math-vision.cooling::after {
+  content: ''; position: absolute; inset: -3px; border-radius: 50%;
+  background: conic-gradient(rgba(255,223,120,0.85) calc((1 - var(--cdp, 0)) * 360deg), rgba(255,255,255,0.15) 0deg);
+  -webkit-mask: radial-gradient(circle, transparent 58%, #000 60%);
+  mask: radial-gradient(circle, transparent 58%, #000 60%);
+  pointer-events: none;
+}
+
+/* 导航终点金色脉冲圈 */
+.guide-target-ring {
+  position: absolute; width: 90px; height: 90px; margin-left: -45px; margin-top: -45px;
+  border: 4px solid rgba(255,223,120,0.9); border-radius: 50%;
+  pointer-events: none; z-index: 2;
+  animation: guide-ring-pulse 1.4s ease-out infinite;
+}
+.guide-target-ring.hidden { display: none; }
+@keyframes guide-ring-pulse {
+  0% { transform: scale(0.55); opacity: 0.95; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+
+/* 守卫 aggro 预警：头顶冒 ❗ */
+.guard-monster.alerted::before {
+  content: '❗'; position: absolute; top: -30px; left: 50%; transform: translateX(-50%);
+  font-size: 26px; animation: guard-alert-pop 0.5s ease-out;
+}
+@keyframes guard-alert-pop {
+  0% { transform: translateX(-50%) scale(0); }
+  70% { transform: translateX(-50%) scale(1.35); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+
+/* 守卫血条 */
+.guard-hp { font-size: 20px; letter-spacing: 3px; margin-top: 2px; min-height: 24px; }
