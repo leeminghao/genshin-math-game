@@ -1323,6 +1323,49 @@ try {
   await capture('07-mobile-puzzle');
   await send('Emulation.clearDeviceMetricsOverride');
 
+  stage('战争迷雾：走过点亮 + 锚点开图 + 雾面存在');
+  await fresh();
+  report.fog = await evaluate(`(() => {
+    const g = window.__game;
+    return {
+      hasCanvas: !!document.querySelector('#world-fog'),
+      initialCells: g.state.map.exploredCells.length
+    };
+  })()`);
+  assert.ok(report.fog.hasCanvas, '大世界应存在雾面 canvas #world-fog');
+  assert.ok(report.fog.initialCells > 0, '新档出生点应预点亮');
+  // 走到远处未探索区（世界东南角），迷雾格应增加
+  await evaluate(`Object.assign(window.__game.session,{playerX:9300,playerY:5600,targetX:9300,targetY:5600,isMoving:false,moveMode:null});window.__game.updatePlayerSprite()`);
+  await sleep(900);
+  report.fog.afterWalk = await evaluate('window.__game.state.map.exploredCells.length');
+  assert.ok(report.fog.afterWalk > report.fog.initialCells, '走过未探索区应点亮新迷雾格');
+  // 小地图雾面覆盖：fogOverlay 缓存应已生成
+  report.fog.overlayCached = await evaluate(`!!(window.__game.session.fogCaches && Object.keys(window.__game.session.fogCaches).length)`);
+  assert.ok(report.fog.overlayCached, '小地图雾面缓存应已生成');
+
+  stage('镇守宝箱：守卫触发与破防解锁');
+  await fresh();
+  report.guard = await evaluate(`(() => {
+    const chests = document.querySelectorAll('.chest');
+    return {
+      guardedCount: [...chests].filter(c => c.classList.contains('guarded')).length,
+      guardEls: document.querySelectorAll('.guard-monster').length
+    };
+  })()`);
+  assert.equal(report.guard.guardedCount, 6, '应有 6 个镇守宝箱');
+  assert.equal(report.guard.guardEls, 6, '应生成 6 只守卫怪');
+  // 靠近 0 号宝箱（8500,2500）的守卫（+78,-40）
+  await evaluate(`Object.assign(window.__game.session,{playerX:8578,playerY:2460,targetX:8578,targetY:2460,isMoving:false,moveMode:null});window.__game.updatePlayerSprite()`);
+  await sleep(700);
+  assert.ok(await evaluate(`!document.querySelector('#guard-modal').classList.contains('hidden')`), '靠近守卫应触发破防战');
+  // 答对破防题 → 守卫清除、宝箱解锁
+  const guardAnswer = await evaluate('window.__game.session.guardAnswer');
+  await evaluate(`[...document.querySelectorAll('#guard-options .guard-option')].find(b => +b.textContent === ${guardAnswer})?.click()`);
+  await sleep(700);
+  assert.ok(await evaluate('window.__game.state.map.chestGuardsCleared.includes(0)'), '答对后 0 号宝箱守卫应清除');
+  report.guard.unlocked = await evaluate(`!document.querySelectorAll('.chest')[0].classList.contains('guarded')`);
+  assert.ok(report.guard.unlocked, '破防后宝箱应解锁（去掉 guarded）');
+
   report.runtimeExceptions = runtimeExceptions;
   assert.deepEqual(runtimeExceptions, [], `浏览器运行时异常：${runtimeExceptions.join('; ')}`);
   console.log(JSON.stringify(report, null, 2));

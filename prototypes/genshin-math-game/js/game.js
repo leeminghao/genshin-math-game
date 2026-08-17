@@ -286,6 +286,8 @@ window.addEventListener('unhandledrejection', function(e) {
       seenStories: [],
       discoveredAreas: [],
       collectedMaterials: [],
+      exploredCells: [],
+      chestGuardsCleared: [],
       worldChanges: {
         windmillRestored: false,
         windcoreLit: false,
@@ -766,6 +768,9 @@ window.addEventListener('unhandledrejection', function(e) {
     normalized.map.seenStories = uniqueValues(rawMap.seenStories, value => validStoryIds.has(value));
     normalized.map.discoveredAreas = uniqueValues(rawMap.discoveredAreas, value => validAreaIds.has(value));
     normalized.map.collectedMaterials = uniqueValues(rawMap.collectedMaterials, Number.isInteger).filter(value => value >= 0);
+    // 战争迷雾：已探索格子（128px 网格）；宝箱守卫：已清除的宝箱序号
+    normalized.map.exploredCells = uniqueValues(rawMap.exploredCells, Number.isInteger).filter(value => value >= 0 && value < 4096);
+    normalized.map.chestGuardsCleared = uniqueValues(rawMap.chestGuardsCleared, Number.isInteger).filter(value => value >= 0);
     const rawWorldChanges = isPlainObject(rawMap.worldChanges) ? rawMap.worldChanges : {};
     // 兼容 v2.x 存档：已经完成对应挑战的玩家不应在升级后看到世界倒退。
     normalized.map.worldChanges.windmillRestored = rawWorldChanges.windmillRestored === true
@@ -951,7 +956,7 @@ window.addEventListener('unhandledrejection', function(e) {
     $$('.material').forEach(item => item.classList.remove('collected'));
     $$('.hidden-area').forEach(area => area.classList.remove('discovered'));
     $$('.story-trigger').forEach(trigger => { trigger.dataset.triggered = 'false'; });
-    ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal', 'shop-modal', 'mechanism-panel', 'bigmap-modal'].forEach(id => {
+    ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal', 'shop-modal', 'mechanism-panel', 'bigmap-modal', 'guard-modal'].forEach(id => {
       $('#' + id)?.classList.add('hidden');
     });
     updateMapHud();
@@ -984,7 +989,7 @@ window.addEventListener('unhandledrejection', function(e) {
   }
 
   function syncControlsLock() {
-    const overlayIds = ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal', 'shop-modal', 'mechanism-panel', 'bigmap-modal'];
+    const overlayIds = ['settings-modal', 'achievements-modal', 'hint-modal', 'teleport-menu', 'learning-profile-modal', 'wardrobe-modal', 'skill-tree-modal', 'quests-modal', 'shop-modal', 'mechanism-panel', 'bigmap-modal', 'guard-modal'];
     session.controlsLocked = overlayIds.some(id => !$('#' + id)?.classList.contains('hidden'));
     if (session.controlsLocked) stopMapMovement();
   }
@@ -1561,6 +1566,13 @@ window.addEventListener('unhandledrejection', function(e) {
     $('#btn-close-teleport').addEventListener('click', () => {
       $('#teleport-menu').classList.add('hidden');
       syncControlsLock();
+    });
+
+    // 宝箱守卫战：撤退
+    $('#btn-guard-flee')?.addEventListener('click', () => {
+      sfx('click');
+      closeGuardBattle();
+      showHint('先撤退了……变强之后再来挑战守卫吧！');
     });
 
     // 点击传送点打开传送菜单
@@ -2465,6 +2477,9 @@ window.addEventListener('unhandledrejection', function(e) {
         session.collectedItems = Array.isArray(state.map?.collectedItems) ? [...state.map.collectedItems] : [];
         session.openedChests = Array.isArray(state.map?.openedChests) ? [...state.map.openedChests] : [];
         session.activatedWaypoints = Array.isArray(state.map?.activatedWaypoints) ? [...state.map.activatedWaypoints] : [];
+        // 战争迷雾：恢复探索足迹（新档则点亮出生点/已激活锚点/已解锁区域）
+        try { initExploration(); } catch (e) { console.warn('initExploration error', e); }
+        try { redrawWorldFog(); } catch (e) { console.warn('redrawWorldFog error', e); }
         // 应用已收集/已开启状态
         $$('.collectible').forEach((item, idx) => {
           item.classList.toggle('collected', session.collectedItems.includes(idx));
@@ -2472,6 +2487,8 @@ window.addEventListener('unhandledrejection', function(e) {
         $$('.chest').forEach((chest, idx) => {
           chest.classList.toggle('opened', session.openedChests.includes(idx));
         });
+        // 镇守宝箱：按存档重建守卫怪
+        try { syncGuardMonsters(); } catch (e) { console.warn('syncGuardMonsters error', e); }
         const collectedMaterials = Array.isArray(state.map?.collectedMaterials) ? state.map.collectedMaterials : [];
         $$('.material').forEach((item, idx) => {
           item.classList.toggle('collected', collectedMaterials.includes(idx));
@@ -2515,6 +2532,128 @@ window.addEventListener('unhandledrejection', function(e) {
       t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
+  }
+
+  // ========== 战争迷雾：128px 网格记录探索足迹，走过/锚点永久点亮 ==========
+  const FOG_CELL = 128;
+  const FOG_COLS = Math.ceil(WORLD.W / FOG_CELL);
+  const FOG_ROWS = Math.ceil(WORLD.H / FOG_CELL);
+
+  // 点亮 (x,y) 周围 radius 内的格子；有新格时推进 fogStamp 让各雾面重绘，并节流存档
+  function revealArea(x, y, radius) {
+    if (!state.map || !Array.isArray(state.map.exploredCells)) return;
+    if (!session.exploredSet) session.exploredSet = new Set(state.map.exploredCells);
+    const set = session.exploredSet;
+    const added = [];
+    const reach = radius + FOG_CELL * 0.5;
+    const col0 = Math.max(0, Math.floor((x - radius) / FOG_CELL));
+    const col1 = Math.min(FOG_COLS - 1, Math.floor((x + radius) / FOG_CELL));
+    const row0 = Math.max(0, Math.floor((y - radius) / FOG_CELL));
+    const row1 = Math.min(FOG_ROWS - 1, Math.floor((y + radius) / FOG_CELL));
+    for (let row = row0; row <= row1; row++) {
+      for (let col = col0; col <= col1; col++) {
+        const cx = col * FOG_CELL + FOG_CELL / 2;
+        const cy = row * FOG_CELL + FOG_CELL / 2;
+        if (Math.hypot(cx - x, cy - y) > reach) continue;
+        const idx = row * FOG_COLS + col;
+        if (!set.has(idx)) { set.add(idx); added.push(idx); }
+      }
+    }
+    if (!added.length) return;
+    state.map.exploredCells.push(...added);
+    session.fogStamp = (session.fogStamp || 0) + 1;
+    const now = performance.now();
+    if (now - (session.fogLastSave || 0) > 4000) {
+      session.fogLastSave = now;
+      saveGame();
+    }
+  }
+
+  // 移动节流：位移超过 90px 才点亮周围 380px（约一屏的一角）
+  function updateFogReveal() {
+    const dx = session.playerX - (session.fogX ?? -9999);
+    const dy = session.playerY - (session.fogY ?? -9999);
+    if (Math.hypot(dx, dy) < 90) return;
+    session.fogX = session.playerX;
+    session.fogY = session.playerY;
+    revealArea(session.playerX, session.playerY, 380);
+  }
+
+  // 大世界雾面：低分辨率 canvas（1/8），未探索区盖晨雾白纱，实体层在其上方不受影响
+  function ensureFogCanvas() {
+    let fog = $('#world-fog');
+    if (fog) return fog;
+    const ground = $('#world-ground');
+    if (!ground) return null;
+    fog = document.createElement('canvas');
+    fog.id = 'world-fog';
+    fog.width = Math.round(WORLD.W * 0.125);
+    fog.height = Math.round(WORLD.H * 0.125);
+    ground.insertAdjacentElement('afterend', fog);
+    return fog;
+  }
+
+  function redrawWorldFog() {
+    const fog = ensureFogCanvas();
+    if (!fog) return;
+    const ctx = fog.getContext('2d');
+    const s = 0.125;
+    const cw = FOG_CELL * s;
+    ctx.clearRect(0, 0, fog.width, fog.height);
+    ctx.fillStyle = 'rgba(233,241,248,0.8)';
+    ctx.fillRect(0, 0, fog.width, fog.height);
+    ctx.globalCompositeOperation = 'destination-out';
+    session.exploredSet?.forEach(idx => {
+      const col = idx % FOG_COLS;
+      const row = Math.floor(idx / FOG_COLS);
+      ctx.fillRect(col * cw - 1, row * cw - 1, cw + 2, cw + 2);
+    });
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // 小地图/大地图共用雾面：按 (尺寸,颜色) 缓存，fogStamp 变化时重绘
+  function fogOverlayCanvas(w, h, color) {
+    session.fogCaches = session.fogCaches || {};
+    const key = `${w}x${h}|${color}`;
+    let entry = session.fogCaches[key];
+    if (!entry) {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      entry = { canvas, stamp: -1 };
+      session.fogCaches[key] = entry;
+    }
+    if (entry.stamp !== session.fogStamp) {
+      const ctx = entry.canvas.getContext('2d');
+      const sx = w / WORLD.W;
+      const sy = h / WORLD.H;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = 'destination-out';
+      session.exploredSet?.forEach(idx => {
+        const col = idx % FOG_COLS;
+        const row = Math.floor(idx / FOG_COLS);
+        ctx.fillRect(col * FOG_CELL * sx - 1, row * FOG_CELL * sy - 1, FOG_CELL * sx + 2, FOG_CELL * sy + 2);
+      });
+      ctx.globalCompositeOperation = 'source-over';
+      entry.stamp = session.fogStamp;
+    }
+    return entry.canvas;
+  }
+
+  // 新档/老档初始化：出生点、已激活锚点、已解锁区域地标预先点亮（老存档不一夜变雾）
+  function initExploration() {
+    session.exploredSet = new Set(Array.isArray(state.map.exploredCells) ? state.map.exploredCells : []);
+    if (session.exploredSet.size > 0) return;
+    const spawn = LAYOUT?.spawn || { x: 1400, y: 2600 };
+    revealArea(spawn.x, spawn.y, 600);
+    (LAYOUT?.waypoints || []).forEach((wp, wid) => {
+      if (session.activatedWaypoints.includes(wid)) revealArea(wp.x, wp.y, 1000);
+    });
+    (LAYOUT?.regions || []).forEach(rg => {
+      if (state.player.unlockedRegions.includes(rg.id)) revealArea(rg.x, rg.y, 700);
+    });
   }
 
   // 首次渲染地图时构建一次世界底层：烘焙全图唯一的大陆底图 + 道路 SVG + 程序化装饰（幂等）
@@ -2697,6 +2836,16 @@ window.addEventListener('unhandledrejection', function(e) {
         ctx.fill();
       }
 
+      // 区域色彩身份：每个区域一层淡淡主色调光晕，远看即可认区（原神式区域色）
+      (LAYOUT.regions || []).forEach(rg => {
+        const rx = rg.x * SCALE, ry = rg.y * SCALE, rr = 950 * SCALE;
+        const tint = ctx.createRadialGradient(rx, ry, 0, rx, ry, rr);
+        tint.addColorStop(0, hexToRgba(rg.color, 0.12));
+        tint.addColorStop(1, hexToRgba(rg.color, 0));
+        ctx.fillStyle = tint;
+        ctx.fillRect(rx - rr, ry - rr, rr * 2, rr * 2);
+      });
+
       // 方向光：左上暖光、右下冷影，全图立体感
       const light = ctx.createLinearGradient(0, 0, ground.width, ground.height);
       light.addColorStop(0, 'rgba(255,244,200,0.12)');
@@ -2800,6 +2949,19 @@ window.addEventListener('unhandledrejection', function(e) {
     });
     canvas.insertBefore(decoLayer, roadSvg.nextSibling);
 
+    // ④ 远景地标：山体障碍上的巨物剪影，制造大世界纵深（不可达区，天然不穿模）
+    const farLayer = document.createElement('div');
+    farLayer.id = 'world-far-landmarks';
+    [['⛰️', 3050, 420], ['🏔️', 6166, 3508], ['🗻', 9480, 1350], ['🌋', 6600, 5750]].forEach(([emoji, x, y]) => {
+      const el = document.createElement('div');
+      el.className = 'far-landmark';
+      el.textContent = emoji;
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      farLayer.appendChild(el);
+    });
+    canvas.insertBefore(farLayer, roadSvg.nextSibling);
+
     session.worldBuilt = true;
   }
 
@@ -2855,7 +3017,14 @@ window.addEventListener('unhandledrejection', function(e) {
           try { updateProximityAnimations(); } catch (e) { console.warn('updateProximityAnimations error', e); }
           try { updateGuideBeam(); } catch (e) { console.warn('updateGuideBeam error', e); }
           try { updateMathVisionMarks(); } catch (e) { console.warn('updateMathVisionMarks error', e); }
+          try { updateFogReveal(); } catch (e) { console.warn('updateFogReveal error', e); }
+          try { checkGuardProximity(); } catch (e) { console.warn('checkGuardProximity error', e); }
         }
+      }
+      // 迷雾足迹有更新时重画大世界雾面（低频，仅 reveal 新格后的一帧）
+      if (session.worldFogStamp !== session.fogStamp) {
+        session.worldFogStamp = session.fogStamp;
+        try { redrawWorldFog(); } catch (e) { console.warn('redrawWorldFog error', e); }
       }
       try { updateCompass(); } catch (e) { console.warn('updateCompass error', e); }
       try { drawMinimap(); } catch (e) { console.warn('drawMinimap error', e); }
@@ -3120,8 +3289,10 @@ window.addEventListener('unhandledrejection', function(e) {
     } else {
       beam.classList.add('hidden');
     }
-    // 地面引导虚线：与光柱同时出现（卡住 60 秒或新目标时），平时收起
-    updateGuidePath(beamActive ? target : null);
+    // 地面引导虚线：原神式常显导航——目标在 500px 以外时持续指路，接近后收起；
+    // 光柱仍只做提醒（进图/完成/卡住时亮 8 秒）
+    const guideDist = target ? Math.hypot(session.playerX - target.x, session.playerY - target.y) : 0;
+    updateGuidePath(target && guideDist > 500 ? target : null);
   }
 
   // 目标头顶距离标记：孩子随时知道"还有多远"
@@ -4015,6 +4186,9 @@ window.addEventListener('unhandledrejection', function(e) {
       });
     }
 
+    // 战争迷雾：未探索区盖暗色，地标/传送点在其上方始终可见
+    try { ctx.drawImage(fogOverlayCanvas(w, h, 'rgba(6,10,18,0.68)'), 0, 0); } catch (e) {}
+
     // 未解锁区域迷雾：暗色罩住，只露轮廓
     $$('.landmark').forEach(lm => {
       const rid = parseInt(lm.dataset.region);
@@ -4121,6 +4295,7 @@ window.addEventListener('unhandledrejection', function(e) {
     updatePlayerSprite();
     updateCamera();
     closeBigmap();
+    revealArea(session.playerX, session.playerY, 600);
     sfx('burst');
     showHint(`已传送到「${wp.querySelector('.waypoint-label')?.textContent || '传送点'}」！`);
     trackEvent('waypoint_teleport', { waypoint: wid });
@@ -4159,6 +4334,9 @@ window.addEventListener('unhandledrejection', function(e) {
     if (!session.activatedWaypoints.includes(wid)) {
       session.activatedWaypoints.push(wid);
       state.map.activatedWaypoints = [...session.activatedWaypoints];
+      // 战争迷雾：激活锚点点亮周围大片区域（神像开图）
+      const wpEl = $(`#waypoint-${wid}`);
+      if (wpEl) revealArea(parseInt(wpEl.style.left), parseInt(wpEl.style.top), 1000);
       sfx('correct');
       // 每日/每周任务：激活传送点计数
       showHint(`💠 传送点已激活！以后可以随时传送到这里。${questCompletionNote(recordQuestProgress('waypoint', 1))}`);
@@ -4215,6 +4393,7 @@ window.addEventListener('unhandledrejection', function(e) {
     updateCamera();
     $('#teleport-menu').classList.add('hidden');
     syncControlsLock();
+    revealArea(session.playerX, session.playerY, 600);
     sfx('burst');
     showHint(`已传送到 ${REGIONS[rid].name}！`);
   }
@@ -4249,6 +4428,15 @@ window.addEventListener('unhandledrejection', function(e) {
       const cx = parseInt(chest.style.left);
       const cy = parseInt(chest.style.top);
       const dist = Math.hypot(session.playerX - cx, session.playerY - cy);
+      // 镇守宝箱：守卫未清除时不可开启，接近时提示去打守卫
+      if (chest.classList.contains('guarded')) {
+        const now = performance.now();
+        if (dist < 130 && now - (session.guardHintAt || 0) > 5000) {
+          session.guardHintAt = now;
+          showHint('⚔️ 宝箱被怪物看守着！靠近旁边的守卫，打败它才能开箱！');
+        }
+        return;
+      }
       if (dist < radius + 10) {
         session.openedChests.push(idx);
         chest.classList.add('opened');
@@ -4262,6 +4450,125 @@ window.addEventListener('unhandledrejection', function(e) {
         checkAchievements();
       }
     });
+  }
+
+  // ========== 镇守宝箱：偏远宝箱有怪物看守，答对破防题清除守卫后解锁 ==========
+  // key = 宝箱 DOM 序号（index.html 内 .chest 顺序），value = 守卫外观
+  const GUARDED_CHESTS = { 0: '🦇', 1: '🕷️', 2: '🐺', 3: '👾', 4: '🦂', 7: '🦖' };
+
+  // 按存档状态重建守卫实体（幂等）：未开启且未清除的镇守宝箱才有守卫
+  function syncGuardMonsters() {
+    $$('.guard-monster').forEach(el => el.remove());
+    const cleared = Array.isArray(state.map?.chestGuardsCleared) ? state.map.chestGuardsCleared : [];
+    $$('.chest').forEach((chest, idx) => {
+      const emoji = GUARDED_CHESTS[idx];
+      const guarded = emoji && !session.openedChests.includes(idx) && !cleared.includes(idx);
+      chest.classList.toggle('guarded', !!guarded);
+      if (!guarded) return;
+      const el = document.createElement('div');
+      el.className = 'guard-monster';
+      el.dataset.chest = idx;
+      el.textContent = emoji;
+      el.style.left = (parseInt(chest.style.left) + 78) + 'px';
+      el.style.top = (parseInt(chest.style.top) - 40) + 'px';
+      $('#world-canvas').appendChild(el);
+    });
+  }
+
+  // 靠近守卫触发破防战（守卫浮在宝箱旁 78px，触发半径 85）
+  function checkGuardProximity() {
+    if (session.guardBattleChest != null) return;
+    $$('.guard-monster').forEach(el => {
+      const x = parseInt(el.style.left);
+      const y = parseInt(el.style.top);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      if (Math.hypot(session.playerX - x, session.playerY - y) < 85) openGuardBattle(parseInt(el.dataset.chest));
+    });
+  }
+
+  // 破防题：按玩家等级出加减/乘法，4 选 1
+  function genGuardQuestion() {
+    const lv = state.player.level || 1;
+    let a, b, op, ans;
+    if (lv >= 5 && Math.random() < 0.5) {
+      a = 3 + Math.floor(Math.random() * 7);
+      b = 3 + Math.floor(Math.random() * 7);
+      op = '×';
+      ans = a * b;
+    } else {
+      const hi = lv >= 3 ? 90 : 18;
+      const lo = lv >= 3 ? 15 : 4;
+      a = lo + Math.floor(Math.random() * hi);
+      b = lo + Math.floor(Math.random() * (hi / 2));
+      op = Math.random() < 0.5 ? '+' : '−';
+      if (op === '−' && b > a) [a, b] = [b, a];
+      ans = op === '+' ? a + b : a - b;
+    }
+    const opts = new Set([ans]);
+    while (opts.size < 4) {
+      const d = ans + (1 + Math.floor(Math.random() * 6)) * (Math.random() < 0.5 ? -1 : 1);
+      if (d >= 0) opts.add(d);
+    }
+    return { text: `${a} ${op} ${b} = ?`, answer: ans, options: [...opts].sort(() => Math.random() - 0.5) };
+  }
+
+  function openGuardBattle(chestIdx) {
+    if (session.guardBattleChest != null) return;
+    session.guardBattleChest = chestIdx;
+    const q = genGuardQuestion();
+    session.guardAnswer = q.answer;
+    $('#guard-emoji').textContent = GUARDED_CHESTS[chestIdx] || '👾';
+    $('#guard-question').textContent = q.text;
+    const box = $('#guard-options');
+    box.innerHTML = '';
+    q.options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'guard-option';
+      btn.textContent = opt;
+      btn.addEventListener('click', () => answerGuardBattle(opt, btn));
+      box.appendChild(btn);
+    });
+    $('#guard-modal').classList.remove('hidden');
+    syncControlsLock();
+    sfx('burst');
+  }
+
+  function answerGuardBattle(opt, btn) {
+    const chestIdx = session.guardBattleChest;
+    if (chestIdx == null) return;
+    if (opt === session.guardAnswer) {
+      // 破防成功：守卫爆掉，宝箱解锁
+      if (!state.map.chestGuardsCleared.includes(chestIdx)) state.map.chestGuardsCleared.push(chestIdx);
+      const guardEl = $(`.guard-monster[data-chest="${chestIdx}"]`);
+      if (guardEl) {
+        guardEl.textContent = '💥';
+        guardEl.classList.add('defeated');
+      }
+      closeGuardBattle();
+      sfx('win');
+      grantRewards({ gems: 8 });
+      saveGame();
+      checkAchievements();
+      setTimeout(() => {
+        syncGuardMonsters();
+        showHint('💥 守卫被打败了！宝箱解锁，还多拿了 8 钻石！快去开箱吧！');
+      }, 350);
+    } else {
+      // 答错：守卫反击抖动，不惩罚，可立刻重选（儿童友好）
+      btn.classList.add('wrong');
+      $('#guard-modal .guard-content')?.classList.add('shake');
+      setTimeout(() => $('#guard-modal .guard-content')?.classList.remove('shake'), 400);
+      sfx('wrong');
+      setTimeout(() => btn.remove(), 350);
+    }
+  }
+
+  function closeGuardBattle() {
+    session.guardBattleChest = null;
+    session.guardAnswer = null;
+    $('#guard-modal').classList.add('hidden');
+    syncControlsLock();
+    focusWorldMap();
   }
 
   function checkHiddenAreas() {
@@ -4342,6 +4649,9 @@ window.addEventListener('unhandledrejection', function(e) {
         ctx.stroke();
       });
     }
+
+    // 战争迷雾：未探索区盖暗色，地标/传送点/玩家在其上方始终可见
+    try { ctx.drawImage(fogOverlayCanvas(w, h, 'rgba(7,12,20,0.82)'), 0, 0); } catch (e) {}
 
     const diamond = (x, y, s) => {
       ctx.beginPath();

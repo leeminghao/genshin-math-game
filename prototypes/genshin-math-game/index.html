@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <title>数境远征：艾瑟里亚数理冒险</title>
-  <link rel="stylesheet" href="css/style.css?v=7.6">
+  <link rel="stylesheet" href="css/style.css?v=7.7">
 </head>
 <body>
   <div id="app">
@@ -55,7 +55,7 @@
         </div>
         <div class="menu-guide-line"><span class="guide-dot"></span>星芽会陪你观察，答错也可以随时重来。</div>
       </div>
-      <div class="version">2D 开放世界 · 数境大陆 v7.6</div>
+      <div class="version">2D 开放世界 · 数境大陆 v7.7</div>
     </section>
 
     <!-- 三题能力诊断 -->
@@ -1118,10 +1118,23 @@
         <button class="genshin-btn" id="btn-close-hint">明白了</button>
       </div>
     </section>
+
+    <!-- 宝箱守卫破防战 -->
+    <section id="guard-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="guard-title">
+      <div class="modal-overlay"></div>
+      <div class="modal-content guard-content">
+        <div class="guard-emoji" id="guard-emoji">👾</div>
+        <h3 id="guard-title">宝箱守卫出现了！</h3>
+        <p class="guard-tip">答对破防题，打败守卫解锁宝箱！</p>
+        <p class="guard-question" id="guard-question"></p>
+        <div class="guard-options" id="guard-options"></div>
+        <button class="text-btn" id="btn-guard-flee">先撤退</button>
+      </div>
+    </section>
   </div>
 
-  <script src="js/data.js?v=7.6"></script>
-  <script src="js/learning.js?v=7.6"></script>
-  <script src="js/game.js?v=7.6"></script>
+  <script src="js/data.js?v=7.7"></script>
+  <script src="js/learning.js?v=7.7"></script>
+  <script src="js/game.js?v=7.7"></script>
 </body>
 </html>
