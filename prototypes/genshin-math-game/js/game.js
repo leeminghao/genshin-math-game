@@ -2691,10 +2691,10 @@ window.addEventListener('unhandledrejection', function(e) {
       const coverScale = Math.max(ground.width / texture.naturalWidth, ground.height / texture.naturalHeight);
       const drawW = texture.naturalWidth * coverScale;
       const drawH = texture.naturalHeight * coverScale;
-      ctx.globalAlpha = 0.35;
+      ctx.globalAlpha = 0.25;
       ctx.drawImage(texture, (ground.width - drawW) / 2, (ground.height - drawH) / 2, drawW, drawH);
-      // 卡通化统一：盖一层柔和浅色，压掉插画细节噪音
-      ctx.globalAlpha = 0.34;
+      // 卡通化统一：盖一层柔和浅色，压掉插画细节噪音（v7.9 加重，画面更平更干净）
+      ctx.globalAlpha = 0.42;
       ctx.fillStyle = '#dcebd2';
       ctx.fillRect(0, 0, ground.width, ground.height);
       ctx.restore();
@@ -2825,8 +2825,8 @@ window.addEventListener('unhandledrejection', function(e) {
       ctx.drawImage(noiseC, 0, 0, ground.width, ground.height);
       ctx.restore();
 
-      // 颗粒噪点：增加地表细节
-      for (let i = 0; i < 4500; i++) {
+      // 颗粒噪点：少量地表细节（v7.9 减量，避免画面花）
+      for (let i = 0; i < 2600; i++) {
         const x = bakeRand() * ground.width, y = bakeRand() * ground.height;
         ctx.fillStyle = bakeRand() < 0.5
           ? `rgba(42,75,58,${0.02 + bakeRand() * 0.05})`
@@ -2836,11 +2836,11 @@ window.addEventListener('unhandledrejection', function(e) {
         ctx.fill();
       }
 
-      // 区域色彩身份：每个区域一层淡淡主色调光晕，远看即可认区（原神式区域色）
+      // 区域色彩身份：每个区域一层极淡主色调光晕（v7.9 降到 0.06，只留可辨认的倾向色）
       (LAYOUT.regions || []).forEach(rg => {
         const rx = rg.x * SCALE, ry = rg.y * SCALE, rr = 950 * SCALE;
         const tint = ctx.createRadialGradient(rx, ry, 0, rx, ry, rr);
-        tint.addColorStop(0, hexToRgba(rg.color, 0.12));
+        tint.addColorStop(0, hexToRgba(rg.color, 0.06));
         tint.addColorStop(1, hexToRgba(rg.color, 0));
         ctx.fillStyle = tint;
         ctx.fillRect(rx - rr, ry - rr, rr * 2, rr * 2);
@@ -2906,16 +2906,16 @@ window.addEventListener('unhandledrejection', function(e) {
       el.textContent = emoji;
       decoLayer.appendChild(el);
     };
-    // 每个区域 12-16 个聚簇（每簇 3-5 个），少而大，成片的生态感
+    // 每个区域 6-9 个聚簇（每簇 2-3 个）：点到为止，色彩克制（v7.9 简洁化）
     LAYOUT.regions.forEach(rg => {
       const pool = ELEMENT_DECOS[REGIONS[rg.id]?.element] || ELEMENT_DECOS.anemo;
-      const clusters = 12 + Math.floor(rand() * 5);
+      const clusters = 6 + Math.floor(rand() * 4);
       for (let c = 0; c < clusters; c++) {
         const cAng = rand() * Math.PI * 2;
         const cDist = Math.sqrt(rand()) * 880;
         const cx = rg.x + Math.cos(cAng) * cDist;
         const cy = rg.y + Math.sin(cAng) * cDist * 0.85;
-        const n = 3 + Math.floor(rand() * 3);
+        const n = 2 + Math.floor(rand() * 2);
         const anchor = pick(pool);
         for (let i = 0; i < n; i++) {
           const ang = rand() * Math.PI * 2;
@@ -2924,22 +2924,22 @@ window.addEventListener('unhandledrejection', function(e) {
         }
       }
     });
-    // 全图稀疏野生装饰 40 个（减半，且两三成对出现）
+    // 全图稀疏野生装饰 16 个（v7.9 再减，保持画面呼吸感）
     const wild = ['🌾', '🍃', '🌼', '🌱', '🍄', '🌿', '🌸', '🪨'];
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 16; i++) {
       const wx = 100 + rand() * (WORLD.W - 200);
       const wy = 100 + rand() * (WORLD.H - 200);
       const wemoji = pick(wild);
       addDeco(wx, wy, wemoji);
       if (rand() < 0.4) addDeco(wx + 30 + rand() * 60, wy + 30 + rand() * 60, wemoji);
     }
-    // 道路沿线每 ~250px 点缀（带抖动）
+    // 道路沿线每 ~420px 点缀（带抖动，密度减半）
     LAYOUT.roads.forEach(road => {
       for (let i = 0; i < road.length - 1; i++) {
         const [ax, ay] = road[i];
         const [bx, by] = road[i + 1];
         const len = Math.hypot(bx - ax, by - ay);
-        for (let d = 125; d < len; d += 250) {
+        for (let d = 210; d < len; d += 420) {
           const t = d / len;
           const jx = (rand() - 0.5) * 140;
           const jy = (rand() - 0.5) * 140;
