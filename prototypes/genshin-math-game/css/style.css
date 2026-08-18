@@ -5351,3 +5351,77 @@ body.math-vision-on #open-world {
 
 /* 守卫血条 */
 .guard-hp { font-size: 20px; letter-spacing: 3px; margin-top: 2px; min-height: 24px; }
+
+/* ========== v8.0 守卫战动作化 ========== */
+/* 守卫可点击（点击=攻击） */
+.guard-monster { pointer-events: auto; cursor: pointer; }
+.guard-monster.in-combat { animation-duration: 0.7s; filter: drop-shadow(0 0 12px rgba(255,80,60,0.75)); }
+.guard-monster.hit { filter: brightness(2.2) drop-shadow(0 0 10px #fff); }
+.guard-monster.enemy-atk { animation: guard-lunge 0.3s ease-out; }
+@keyframes guard-lunge {
+  40% { transform: translateY(8px) scale(1.22); }
+}
+
+/* 守卫头顶血条 */
+.guard-hpbar {
+  position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+  width: 64px; height: 8px; border-radius: 4px;
+  background: rgba(10,16,26,0.72); border: 1px solid rgba(255,255,255,0.55);
+  overflow: hidden;
+}
+.guard-hpbar i {
+  display: block; height: 100%; width: 100%;
+  background: linear-gradient(90deg, #ff5f4d, #ffb04d);
+  transition: width 0.18s ease-out;
+}
+
+/* 伤害浮动数字 */
+.dmg-float {
+  position: absolute; top: -34px; left: 50%; transform: translateX(-50%);
+  font-size: 26px; font-weight: 900; color: #fff;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+  animation: dmg-rise 0.85s ease-out forwards; pointer-events: none;
+}
+.dmg-float.golden { color: #ffd94d; font-size: 34px; text-shadow: 0 0 12px rgba(255,200,60,0.9), 0 2px 4px rgba(0,0,0,0.6); }
+@keyframes dmg-rise {
+  0% { opacity: 0; transform: translateX(-50%) translateY(10px) scale(0.6); }
+  25% { opacity: 1; transform: translateX(-50%) translateY(-6px) scale(1.15); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-42px) scale(1); }
+}
+
+/* 玩家挥剑与受击 */
+#player-sprite.attacking { animation: player-slash 0.34s ease-out; }
+@keyframes player-slash {
+  30% { transform: translateX(14px) rotate(9deg) scale(1.08); }
+  60% { transform: translateX(-4px) rotate(-5deg); }
+}
+#player-sprite.hurt { animation: player-hurt 0.32s ease-out; }
+@keyframes player-hurt {
+  0%, 100% { filter: none; }
+  40% { filter: brightness(1.8) sepia(1) hue-rotate(-40deg) saturate(3); transform: translateX(-8px); }
+}
+
+/* 玩家头顶血条（交战期间） */
+#player-hp-float {
+  position: absolute; width: 76px; height: 9px; margin-left: -38px;
+  border-radius: 5px; background: rgba(10,16,26,0.7);
+  border: 1.5px solid rgba(255,255,255,0.6); overflow: hidden; z-index: 30;
+  pointer-events: none;
+}
+#player-hp-float.hidden { display: none; }
+#player-hp-float i {
+  display: block; height: 100%; width: 100%;
+  background: linear-gradient(90deg, #59d67c, #b7f25c);
+  transition: width 0.2s ease-out;
+}
+
+/* ========== v8.0 远景视差层 ========== */
+#world-parallax {
+  position: absolute; top: 0; left: 0; width: 10000px; height: 6000px;
+  pointer-events: none; z-index: 6;
+}
+.parallax-cloud {
+  position: absolute; transform: translate(-50%, -50%);
+  opacity: 0.3; filter: blur(1px);
+  pointer-events: none; user-select: none;
+}

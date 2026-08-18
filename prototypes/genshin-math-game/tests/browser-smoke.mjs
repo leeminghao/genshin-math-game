@@ -1343,7 +1343,7 @@ try {
   report.fog.overlayCached = await evaluate(`!!(window.__game.session.fogCaches && Object.keys(window.__game.session.fogCaches).length)`);
   assert.ok(report.fog.overlayCached, '小地图雾面缓存应已生成');
 
-  stage('镇守宝箱：守卫触发、血量、武器先制与破防解锁');
+  stage('镇守宝箱：实时动作战、智慧一击与破防解锁');
   await fresh();
   report.guard = await evaluate(`(() => {
     const chests = document.querySelectorAll('.chest');
@@ -1354,23 +1354,46 @@ try {
   })()`);
   assert.equal(report.guard.guardedCount, 6, '应有 6 个镇守宝箱');
   assert.equal(report.guard.guardEls, 6, '应生成 6 只守卫怪');
-  // 装备高攻武器（attackBonus 40 ≥ 20）验证先制：3 血守卫开局变 2 血
-  await evaluate(`window.__game.state.inventory.weapons.push('flame');window.__game.state.equipment.weapon='flame'`);
-  // 靠近 0 号宝箱（8500,2500）的守卫（+78,-40）；先等控件解锁，守卫检测在 200ms tick 内
+  // 靠近 0 号宝箱守卫（8578,2460）→ 自动进入实时交战（不弹答题窗）
   await waitFor('window.__game.session.controlsLocked === false');
   await evaluate(`Object.assign(window.__game.session,{playerX:8578,playerY:2460,targetX:8578,targetY:2460,isMoving:false,moveMode:null});window.__game.updatePlayerSprite()`);
-  await waitFor(`!document.querySelector('#guard-modal').classList.contains('hidden')`);
-  report.guard.hpAfterPreempt = await evaluate('window.__game.session.guardHp');
-  assert.equal(report.guard.hpAfterPreempt, 2, '武器先制后 3 血守卫应剩 2 血');
-  // 连答 2 题打空血量 → 守卫清除、宝箱解锁
-  for (let i = 0; i < 2; i++) {
-    const ans = await evaluate('window.__game.session.guardAnswer');
-    await evaluate(`[...document.querySelectorAll('#guard-options .guard-option')].find(b => +b.textContent === ${ans})?.click()`);
-    await sleep(650);
+  await waitFor('!!window.__game.session.guardCombat');
+  report.guard.startHp = await evaluate('window.__game.session.guardCombat.hp');
+  assert.equal(report.guard.startHp, 20, '0 号守卫应为 20 血');
+  assert.ok(await evaluate(`document.querySelector('#guard-modal').classList.contains('hidden')`), '交战不应弹出答题窗');
+  // 木剑普攻 dmg=2：两刀后 16 血
+  await evaluate('window.__game.attackGuard()');
+  await sleep(500);
+  await evaluate('window.__game.attackGuard()');
+  await sleep(500);
+  report.guard.hpAfter2 = await evaluate('window.__game.session.guardCombat.hp');
+  assert.equal(report.guard.hpAfter2, 16, '两次普攻后应剩 16 血');
+  // 第 3 击触发智慧一击（答题暴击）：答对 3 倍伤害
+  await evaluate('window.__game.attackGuard()');
+  await sleep(300);
+  assert.ok(await evaluate(`!document.querySelector('#guard-modal').classList.contains('hidden')`), '第 3 击应触发智慧一击弹窗');
+  const strikeAns = await evaluate('window.__game.session.guardAnswer');
+  await evaluate(`[...document.querySelectorAll('#guard-options .guard-option')].find(b => +b.textContent === ${strikeAns})?.click()`);
+  await sleep(400);
+  report.guard.hpAfterStrike = await evaluate('window.__game.session.guardCombat.hp');
+  assert.equal(report.guard.hpAfterStrike, 10, '智慧一击暴击后应剩 10 血');
+  // 连续打到胜利（普攻+智慧一击循环）
+  let cleared = false;
+  for (let i = 0; i < 24 && !cleared; i++) {
+    const modalOpen = await evaluate(`!document.querySelector('#guard-modal').classList.contains('hidden')`);
+    if (modalOpen) {
+      const ans = await evaluate('window.__game.session.guardAnswer');
+      await evaluate(`[...document.querySelectorAll('#guard-options .guard-option')].find(b => +b.textContent === ${ans})?.click()`);
+    } else {
+      await evaluate('window.__game.attackGuard()');
+    }
+    await sleep(520);
+    cleared = await evaluate('window.__game.state.map.chestGuardsCleared.includes(0)');
   }
-  assert.ok(await evaluate('window.__game.state.map.chestGuardsCleared.includes(0)'), '打空血量后 0 号宝箱守卫应清除');
+  assert.ok(cleared, '打空血量后 0 号宝箱守卫应清除');
+  await sleep(700);
   report.guard.unlocked = await evaluate(`!document.querySelectorAll('.chest')[0].classList.contains('guarded')`);
-  assert.ok(report.guard.unlocked, '破防后宝箱应解锁（去掉 guarded）');
+  assert.ok(report.guard.unlocked, '胜利后宝箱应解锁（去掉 guarded）');
 
   stage('数学视野：全屏滤镜与守卫显形');
   await fresh();

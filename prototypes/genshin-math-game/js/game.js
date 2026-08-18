@@ -887,6 +887,8 @@ window.addEventListener('unhandledrejection', function(e) {
       currentLandmark: null,
       currentWaypoint: null,
       mobileActionTarget: null,
+      guardCombat: null,
+      guardAlerted: new Set(),
       mapActive: false,
       bumpAt: 0,
       collectedItems: [],
@@ -1308,6 +1310,12 @@ window.addEventListener('unhandledrejection', function(e) {
       if (actionKey === 'v' && session.mapActive && !session.controlsLocked) {
         e.preventDefault();
         useMathVision();
+        return;
+      }
+      // 守卫战普攻：J 挥剑
+      if (actionKey === 'j' && session.guardCombat && !session.controlsLocked) {
+        e.preventDefault();
+        attackGuard();
         return;
       }
       if (actionKey === 'enter' || actionKey === ' ') {
@@ -2691,10 +2699,10 @@ window.addEventListener('unhandledrejection', function(e) {
       const coverScale = Math.max(ground.width / texture.naturalWidth, ground.height / texture.naturalHeight);
       const drawW = texture.naturalWidth * coverScale;
       const drawH = texture.naturalHeight * coverScale;
-      ctx.globalAlpha = 0.25;
+      ctx.globalAlpha = 0.75;
       ctx.drawImage(texture, (ground.width - drawW) / 2, (ground.height - drawH) / 2, drawW, drawH);
-      // 卡通化统一：盖一层柔和浅色，压掉插画细节噪音（v7.9 加重，画面更平更干净）
-      ctx.globalAlpha = 0.42;
+      // 轻量统一覆盖：保留手绘大陆的色彩与细节，只压一点点噪（v8.0 插画全显化）
+      ctx.globalAlpha = 0.15;
       ctx.fillStyle = '#dcebd2';
       ctx.fillRect(0, 0, ground.width, ground.height);
       ctx.restore();
@@ -2962,6 +2970,27 @@ window.addEventListener('unhandledrejection', function(e) {
     });
     canvas.insertBefore(farLayer, roadSvg.nextSibling);
 
+    // ⑤ 远景视差层：云以低于地面的速度移动，2D 俯视也有纵深（挂在 #open-world，独立变换）
+    let parallax = $('#world-parallax');
+    if (!parallax) {
+      parallax = document.createElement('div');
+      parallax.id = 'world-parallax';
+      const clouds = [
+        ['☁️', 1800, 1200, 210], ['🌥️', 4600, 900, 260], ['☁️', 7200, 1400, 190],
+        ['⛅', 3200, 3600, 230], ['☁️', 6200, 4200, 200], ['🌥️', 8800, 3400, 240]
+      ];
+      clouds.forEach(([emoji, x, y, size]) => {
+        const el = document.createElement('div');
+        el.className = 'parallax-cloud';
+        el.textContent = emoji;
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+        el.style.fontSize = size + 'px';
+        parallax.appendChild(el);
+      });
+      $('#open-world').appendChild(parallax);
+    }
+
     session.worldBuilt = true;
   }
 
@@ -3025,6 +3054,11 @@ window.addEventListener('unhandledrejection', function(e) {
       if (session.worldFogStamp !== session.fogStamp) {
         session.worldFogStamp = session.fogStamp;
         try { redrawWorldFog(); } catch (e) { console.warn('redrawWorldFog error', e); }
+      }
+      // 守卫实时战斗：反击计时、脱战检测、玩家血条跟随（答题锁定期间暂停）
+      if (!session.controlsLocked) {
+        try { updateGuardCombat(); } catch (e) { console.warn('updateGuardCombat error', e); }
+        if (session.guardCombat) { try { updatePlayerHpFloat(); } catch (e) {} }
       }
       try { updateCompass(); } catch (e) { console.warn('updateCompass error', e); }
       try { drawMinimap(); } catch (e) { console.warn('drawMinimap error', e); }
@@ -3217,8 +3251,9 @@ window.addEventListener('unhandledrejection', function(e) {
     const worldH = WORLD.H;
 
     // 镜头居中玩家 + 向移动方向 lookahead（原神式预瞄）
+    // 角色固定在屏幕纵向 58% 处：多看前方世界，跟随感更像原神
     let camX = session.playerX + (session.velX || 0) * 0.25 - vw / 2;
-    let camY = session.playerY + (session.velY || 0) * 0.25 - vh / 2;
+    let camY = session.playerY + (session.velY || 0) * 0.25 - vh * 0.58;
 
     // 限制镜头边界
     camX = Math.max(0, Math.min(worldW - vw, camX));
@@ -3229,6 +3264,9 @@ window.addEventListener('unhandledrejection', function(e) {
     session.cameraY += (camY - session.cameraY) * 0.2;
 
     $('#world-canvas').style.transform = `translate(${-session.cameraX}px, ${-session.cameraY}px)`;
+    // 远景视差：云层 0.45 倍速跟随，制造纵深
+    const parallax = $('#world-parallax');
+    if (parallax) parallax.style.transform = `translate(${-session.cameraX * 0.45}px, ${-session.cameraY * 0.45}px)`;
   }
 
   // 动画静默化：只有玩家靠近的实体才播动画，远处一律静止（参考原神：静态世界，动态焦点）
@@ -3541,6 +3579,15 @@ window.addEventListener('unhandledrejection', function(e) {
       if (dist < mech.radius) candidates.push({ type: 'mechanism', id: mech.id, dist, label: mech.actionLabel || '修复' });
     });
 
+    // 守卫战中：最近交互目标替换为"攻击"（移动端主攻击键）
+    if (session.guardCombat) {
+      const el = $(`.guard-monster[data-chest="${session.guardCombat.chest}"]`);
+      if (el) {
+        const dist = Math.hypot(session.playerX - parseInt(el.style.left), session.playerY - parseInt(el.style.top));
+        if (dist < 200) candidates.push({ type: 'guard', id: session.guardCombat.chest, dist: -1, label: '攻击' });
+      }
+    }
+
     const target = candidates.sort((a, b) => a.dist - b.dist)[0] || null;
     if (target) {
       btn.classList.remove('hidden');
@@ -3569,6 +3616,8 @@ window.addEventListener('unhandledrejection', function(e) {
       startNpcDialog(target.id);
     } else if (target.type === 'mechanism') {
       openMechanism(target.id);
+    } else if (target.type === 'guard') {
+      attackGuard();
     }
   }
 
@@ -4468,15 +4517,15 @@ window.addEventListener('unhandledrejection', function(e) {
     });
   }
 
-  // ========== 镇守宝箱：偏远宝箱有怪物看守，破防战打空守卫血量后解锁 ==========
-  // key = 宝箱 DOM 序号（index.html 内 .chest 顺序）；hp = 需要答对的题数
+  // ========== 镇守宝箱：原神式实时动作战——挥剑普攻 + 智慧一击（答题=暴击技能） ==========
+  // key = 宝箱 DOM 序号（index.html 内 .chest 顺序）；hp = 守卫血量
   const GUARDED_CHESTS = {
-    0: { emoji: '🦇', hp: 3 },
-    1: { emoji: '🕷️', hp: 3 },
-    2: { emoji: '🐺', hp: 2 },
-    3: { emoji: '👾', hp: 2 },
-    4: { emoji: '🦂', hp: 2 },
-    7: { emoji: '🦖', hp: 3 }
+    0: { emoji: '🦇', hp: 20 },
+    1: { emoji: '🕷️', hp: 20 },
+    2: { emoji: '🐺', hp: 14 },
+    3: { emoji: '👾', hp: 14 },
+    4: { emoji: '🦂', hp: 14 },
+    7: { emoji: '🦖', hp: 20 }
   };
 
   // 按存档状态重建守卫实体（幂等）：未开启且未清除的镇守宝箱才有守卫
@@ -4494,13 +4543,205 @@ window.addEventListener('unhandledrejection', function(e) {
       el.textContent = def.emoji;
       el.style.left = (parseInt(chest.style.left) + 78) + 'px';
       el.style.top = (parseInt(chest.style.top) - 40) + 'px';
+      // 点击守卫 = 攻击（未交战时先进入交战）；只在答题弹窗打开时禁用点击
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!$('#guard-modal').classList.contains('hidden')) return;
+        const chestIdx = parseInt(el.dataset.chest);
+        if (!session.guardCombat) {
+          const dist = Math.hypot(session.playerX - parseInt(el.style.left), session.playerY - parseInt(el.style.top));
+          if (dist >= 110) { showHint('走近一点才能打到它！'); return; }
+          startGuardCombat(chestIdx);
+        }
+        if (session.guardCombat?.chest === chestIdx) attackGuard();
+      });
       $('#world-canvas').appendChild(el);
     });
   }
 
-  // 靠近守卫触发破防战；260px 内先冒 ❗ 预警（原神式仇恨提示，每守卫每次进图一次）
+  function currentWeapon() {
+    return WEAPONS.find(w => w.id === state.equipment?.weapon) || WEAPONS[0];
+  }
+  function currentArmor() {
+    return ARMORS.find(a => a.id === state.equipment?.armor) || ARMORS[0];
+  }
+
+  // 进入交战：不切屏不弹窗，守卫头顶出血条，玩家直接开打
+  function startGuardCombat(chestIdx) {
+    if (session.guardCombat) return;
+    const def = GUARDED_CHESTS[chestIdx];
+    if (!def) return;
+    session.guardCombat = {
+      chest: chestIdx,
+      hp: def.hp,
+      maxHp: def.hp,
+      energy: 0,
+      lastAtkAt: 0,
+      nextEnemyAtkAt: performance.now() + 2000
+    };
+    const el = $(`.guard-monster[data-chest="${chestIdx}"]`);
+    if (el) {
+      el.classList.add('in-combat');
+      el.classList.remove('alerted');
+      const bar = document.createElement('div');
+      bar.className = 'guard-hpbar';
+      bar.innerHTML = '<i></i>';
+      el.appendChild(bar);
+    }
+    updatePlayerHpFloat();
+    sfx('burst');
+    showHint(`⚔️ ${def.emoji} 守卫攻过来了！点击怪物或按 J 挥剑，普攻 3 次攒出智慧一击！`, 2000);
+    trackEvent('guard_combat_start', { chest: chestIdx });
+  }
+
+  // 脱战：跑远 430px 脱离，守卫回血，玩家回满（儿童友好）
+  function endGuardCombat(reason) {
+    const c = session.guardCombat;
+    if (!c) return;
+    const el = $(`.guard-monster[data-chest="${c.chest}"]`);
+    if (el) {
+      el.classList.remove('in-combat');
+      el.querySelector('.guard-hpbar')?.remove();
+    }
+    session.guardCombat = null;
+    state.player.hp = state.player.maxHp;
+    updatePlayerHpFloat();
+    if (reason === 'flee') showHint('脱离了战斗，守卫回到了宝箱旁。');
+  }
+
+  // 普攻：挥剑动画 + 伤害数字；每第 3 击转为智慧一击（答题暴击）
+  // 注意：只在智慧一击弹窗打开时禁止攻击，提示浮层不挡战斗操作
+  function attackGuard() {
+    const c = session.guardCombat;
+    if (!c) return;
+    if (!$('#guard-modal').classList.contains('hidden')) return;
+    const now = performance.now();
+    if (now - c.lastAtkAt < 420) return;
+    c.lastAtkAt = now;
+    const dmg = Math.max(2, Math.ceil((currentWeapon().attackBonus || 5) / 2.5));
+    c.energy += 1;
+    if (c.energy >= 3) {
+      openWisdomStrike(dmg);
+      return; // 伤害在答题后结算
+    }
+    applyGuardDamage(dmg, false);
+  }
+
+  // 伤害结算 + 表现：挥剑、守卫闪白、浮动伤害数字、血条
+  function applyGuardDamage(dmg, golden) {
+    const c = session.guardCombat;
+    if (!c) return;
+    c.hp -= dmg;
+    sfx(golden ? 'win' : 'correct');
+    const playerEl = $('#player-sprite');
+    if (playerEl) {
+      playerEl.classList.add('attacking');
+      setTimeout(() => playerEl.classList.remove('attacking'), 340);
+    }
+    const el = $(`.guard-monster[data-chest="${c.chest}"]`);
+    if (el) {
+      el.classList.add('hit');
+      setTimeout(() => el.classList.remove('hit'), 220);
+      const bar = el.querySelector('.guard-hpbar i');
+      if (bar) bar.style.width = Math.max(0, (c.hp / c.maxHp) * 100) + '%';
+      const num = document.createElement('div');
+      num.className = 'dmg-float' + (golden ? ' golden' : '');
+      num.textContent = `-${dmg}`;
+      el.appendChild(num);
+      setTimeout(() => num.remove(), 900);
+    }
+    if (c.hp <= 0) guardVictory(c.chest);
+  }
+
+  function guardVictory(chestIdx) {
+    if (!state.map.chestGuardsCleared.includes(chestIdx)) state.map.chestGuardsCleared.push(chestIdx);
+    const el = $(`.guard-monster[data-chest="${chestIdx}"]`);
+    if (el) {
+      el.textContent = '💥';
+      el.classList.add('defeated');
+    }
+    endGuardCombat('victory');
+    sfx('win');
+    grantRewards({ gems: 8 });
+    saveGame();
+    checkAchievements();
+    setTimeout(() => {
+      syncGuardMonsters();
+      showHint('💥 守卫被打败了！宝箱解锁，还多拿了 8 钻石！快去开箱吧！');
+    }, 400);
+  }
+
+  // 主循环驱动：守卫定期反击；玩家血空战败回营地；跑远脱战
+  function updateGuardCombat() {
+    const c = session.guardCombat;
+    if (!c) return;
+    const el = $(`.guard-monster[data-chest="${c.chest}"]`);
+    if (!el) { session.guardCombat = null; return; }
+    const gx = parseInt(el.style.left);
+    const gy = parseInt(el.style.top);
+    if (Math.hypot(session.playerX - gx, session.playerY - gy) > 430) {
+      endGuardCombat('flee');
+      return;
+    }
+    const now = performance.now();
+    if (now >= c.nextEnemyAtkAt) {
+      c.nextEnemyAtkAt = now + 2400;
+      const dmg = Math.max(1, 6 - (currentArmor().defenseBonus || 0));
+      state.player.hp = Math.max(0, state.player.hp - dmg);
+      el.classList.add('enemy-atk');
+      setTimeout(() => el.classList.remove('enemy-atk'), 300);
+      const playerEl = $('#player-sprite');
+      if (playerEl) {
+        playerEl.classList.add('hurt');
+        setTimeout(() => playerEl.classList.remove('hurt'), 320);
+      }
+      updatePlayerHpFloat();
+      sfx('wrong');
+      if (state.player.hp <= 0) {
+        // 战败：送回出生点营地，血量回到 30%，守卫回满
+        const spawn = LAYOUT?.spawn || { x: 1400, y: 2600 };
+        endGuardCombat('defeat');
+        state.player.hp = Math.ceil(state.player.maxHp * 0.3);
+        session.playerX = spawn.x;
+        session.playerY = spawn.y;
+        session.targetX = spawn.x;
+        session.targetY = spawn.y;
+        session.isMoving = false;
+        session.moveMode = null;
+        session.velX = 0;
+        session.velY = 0;
+        updatePlayerSprite();
+        updateCamera();
+        showHint('😵 被打倒了……星芽把你背回了营地。去商店升级武器装备，再来挑战吧！', 4000);
+        trackEvent('guard_combat_defeat', { chest: c.chest });
+      }
+    }
+  }
+
+  // 玩家头顶血条：仅交战期间显示
+  function updatePlayerHpFloat() {
+    let bar = $('#player-hp-float');
+    const inCombat = !!session.guardCombat;
+    if (!inCombat) {
+      bar?.classList.add('hidden');
+      return;
+    }
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'player-hp-float';
+      bar.innerHTML = '<i></i>';
+      $('#world-canvas').appendChild(bar);
+    }
+    bar.style.left = session.playerX + 'px';
+    bar.style.top = (session.playerY - 78) + 'px';
+    const fill = bar.querySelector('i');
+    if (fill) fill.style.width = Math.max(0, (state.player.hp / state.player.maxHp) * 100) + '%';
+    bar.classList.remove('hidden');
+  }
+
+  // 守卫警戒与触发：260px 冒 ❗ 预警（每守卫每次进图一次），95px 内进入实时交战
   function checkGuardProximity() {
-    if (session.guardBattleChest != null) return;
+    if (session.guardCombat) return;
     session.guardAlerted = session.guardAlerted || new Set();
     $$('.guard-monster').forEach(el => {
       const x = parseInt(el.style.left);
@@ -4513,7 +4754,7 @@ window.addEventListener('unhandledrejection', function(e) {
         el.classList.add('alerted');
         sfx('wrong');
       }
-      if (dist < 85) openGuardBattle(chestIdx);
+      if (dist < 95) startGuardCombat(chestIdx);
     });
   }
 
@@ -4543,34 +4784,16 @@ window.addEventListener('unhandledrejection', function(e) {
     return { text: `${a} ${op} ${b} = ?`, answer: ans, options: [...opts].sort(() => Math.random() - 0.5) };
   }
 
-  function renderGuardHp() {
-    const el = $('#guard-hp');
-    if (el) el.textContent = '❤️'.repeat(Math.max(0, session.guardHp || 0)) || '💀';
-  }
-
-  function openGuardBattle(chestIdx) {
-    if (session.guardBattleChest != null) return;
-    session.guardBattleChest = chestIdx;
-    const def = GUARDED_CHESTS[chestIdx] || { emoji: '👾', hp: 2 };
-    session.guardHp = def.hp;
-    // 武器先制：装备 attackBonus ≥ 20 的武器，开战先削 1 格血（武器价值体感）
-    const weapon = WEAPONS.find(w => w.id === state.equipment?.weapon);
-    const preempt = (weapon?.attackBonus || 0) >= 20 && session.guardHp > 1;
-    if (preempt) session.guardHp -= 1;
-    $('#guard-emoji').textContent = def.emoji;
-    $('#guard-tip').textContent = preempt
-      ? `${weapon.emoji} ${weapon.name} 先制攻击！守卫还没反应过来就掉了 1 格血！`
-      : '答对破防题，打空守卫血量就能解锁宝箱！';
-    renderGuardHp();
-    nextGuardQuestion();
-    $('#guard-modal').classList.remove('hidden');
-    syncControlsLock();
-    sfx('burst');
-  }
-
-  function nextGuardQuestion() {
+  // 智慧一击：普攻 3 次攒满能量后的暴击题——答对 3 倍伤害，跳过/答错按普通伤害
+  function openWisdomStrike(baseDmg) {
+    const c = session.guardCombat;
+    if (!c) return;
+    c.strikeDmg = baseDmg;
     const q = genGuardQuestion();
     session.guardAnswer = q.answer;
+    $('#guard-emoji').textContent = GUARDED_CHESTS[c.chest]?.emoji || '👾';
+    $('#guard-title').textContent = '💡 智慧一击！';
+    $('#guard-tip').textContent = `答对造成 ${baseDmg * 3} 点暴击伤害！`;
     $('#guard-question').textContent = q.text;
     const box = $('#guard-options');
     box.innerHTML = '';
@@ -4581,52 +4804,29 @@ window.addEventListener('unhandledrejection', function(e) {
       btn.addEventListener('click', () => answerGuardBattle(opt, btn));
       box.appendChild(btn);
     });
+    $('#guard-hp').textContent = '';
+    $('#btn-guard-flee').textContent = `跳过（造成 ${baseDmg} 点伤害）`;
+    $('#guard-modal').classList.remove('hidden');
+    syncControlsLock();
+    sfx('burst');
   }
 
   function answerGuardBattle(opt, btn) {
-    const chestIdx = session.guardBattleChest;
-    if (chestIdx == null) return;
-    if (opt === session.guardAnswer) {
-      session.guardHp -= 1;
-      sfx('correct');
-      if (session.guardHp > 0) {
-        // 还有血：破防一截，出下一题
-        renderGuardHp();
-        $$('#guard-options .guard-option').forEach(b => b.disabled = true);
-        setTimeout(nextGuardQuestion, 450);
-        return;
-      }
-      // 血空：守卫爆掉，宝箱解锁
-      if (!state.map.chestGuardsCleared.includes(chestIdx)) state.map.chestGuardsCleared.push(chestIdx);
-      const guardEl = $(`.guard-monster[data-chest="${chestIdx}"]`);
-      if (guardEl) {
-        guardEl.textContent = '💥';
-        guardEl.classList.add('defeated');
-      }
-      closeGuardBattle();
-      sfx('win');
-      grantRewards({ gems: 8 });
-      saveGame();
-      checkAchievements();
-      setTimeout(() => {
-        syncGuardMonsters();
-        showHint('💥 守卫被打败了！宝箱解锁，还多拿了 8 钻石！快去开箱吧！');
-      }, 350);
-    } else {
-      // 答错：守卫反击抖动，不惩罚，可立刻重选（儿童友好）
-      btn.classList.add('wrong');
-      $('#guard-modal .guard-content')?.classList.add('shake');
-      setTimeout(() => $('#guard-modal .guard-content')?.classList.remove('shake'), 400);
-      sfx('wrong');
-      setTimeout(() => btn.remove(), 350);
-    }
+    const c = session.guardCombat;
+    if (!c) return;
+    const correct = opt === session.guardAnswer;
+    const dmg = correct ? c.strikeDmg * 3 : c.strikeDmg;
+    c.energy = 0;
+    closeGuardBattle();
+    applyGuardDamage(dmg, correct);
+    if (!correct && btn) sfx('wrong');
   }
 
   function closeGuardBattle() {
-    session.guardBattleChest = null;
     session.guardAnswer = null;
-    session.guardHp = 0;
     $('#guard-modal').classList.add('hidden');
+    // 答题占用的时间不计入守卫反击计时
+    if (session.guardCombat) session.guardCombat.nextEnemyAtkAt = performance.now() + 2400;
     syncControlsLock();
     focusWorldMap();
   }
@@ -7318,6 +7518,7 @@ window.addEventListener('unhandledrejection', function(e) {
     openMechanism,
     useMathVision,
     updateMathVisionMarks,
-    revealArea
+    revealArea,
+    attackGuard
   };
 })();
